@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro — Chá de Panelas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Chá de <span>Panelas</span></a>
+      <ul class="nav-links">
+        <li><a href="/lista.html">Lista de Presentes</a></li>
+        <li><a href="/carrinho.html" class="nav-cart">🛒 Carrinho <span class="cart-badge"></span></a></li>
+      </ul>
+      <div id="nav-user-area"></div>
+    </div>
+  </nav>
+
+  <div class="form-page">
+    <div class="container-sm" style="width:100%;">
+      <div class="form-card">
+        <h1>Criar Conta</h1>
+        <p class="form-subtitle">Cadastre-se para reservar seus presentes</p>
+
+        <div class="form-error" id="form-error"></div>
+
+        <form id="register-form" novalidate>
+          <div class="form-group">
+            <label for="name">Nome Completo</label>
+            <input type="text" id="name" name="name" placeholder="Seu nome completo" autocomplete="name" required />
+          </div>
+          <div class="form-group">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" placeholder="seu@email.com" autocomplete="email" required />
+          </div>
+          <div class="form-group">
+            <label for="password">Senha</label>
+            <input type="password" id="password" name="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" required minlength="6" />
+          </div>
+          <div class="form-group">
+            <label for="confirm">Confirmar Senha</label>
+            <input type="password" id="confirm" name="confirm" placeholder="Repita a senha" autocomplete="new-password" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full" id="submit-btn">
+            Criar Conta
+          </button>
+        </form>
+
+        <p class="form-alt">
+          Já tem conta? <a id="login-link" href="/login.html">Entrar</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p class="footer-names" data-config="nomes">[Nome da Noiva] &amp; [Nome do Noivo]</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect') || '/lista.html';
+
+    // Update login link to preserve redirect
+    const loginLink = document.getElementById('login-link');
+    if (redirect !== '/lista.html') {
+      loginLink.href = `/login.html?redirect=${encodeURIComponent(redirect)}`;
+    }
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('form-error');
+      const btn = document.getElementById('submit-btn');
+      errorEl.classList.remove('visible');
+
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+
+      if (!name || !email || !password) {
+        errorEl.textContent = 'Preencha todos os campos.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      if (password.length < 6) {
+        errorEl.textContent = 'A senha deve ter ao menos 6 caracteres.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      if (password !== confirm) {
+        errorEl.textContent = 'As senhas não coincidem.';
+        errorEl.classList.add('visible');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Criando conta...';
+
+      const res = await App.apiFetch('/api/auth/register', {
+        method: 'POST',
+        body: { name, email, password },
+      });
+
+      if (res.ok) {
+        App.showToast('Conta criada com sucesso! 🎉', 'success');
+        setTimeout(() => { window.location.href = redirect; }, 500);
+      } else {
+        errorEl.textContent = res.error || 'Erro ao criar conta. Tente novamente.';
+        errorEl.classList.add('visible');
+        btn.disabled = false;
+        btn.textContent = 'Criar Conta';
+      }
+    });
+  </script>
+</body>
+</html>

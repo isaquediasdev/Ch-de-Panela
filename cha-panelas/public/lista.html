@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lista de Presentes — Chá de Panelas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Chá de <span>Panelas</span></a>
+      <ul class="nav-links">
+        <li><a href="/lista.html">Lista de Presentes</a></li>
+        <li><a href="/carrinho.html" class="nav-cart">🛒 Carrinho <span class="cart-badge"></span></a></li>
+      </ul>
+      <div id="nav-user-area"></div>
+    </div>
+  </nav>
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <h1>Lista de Presentes</h1>
+    <p class="subtitle" id="stats-subtitle">80 presentes · Meta R$ 10.200</p>
+  </div>
+
+  <!-- FILTER TABS -->
+  <div class="filter-tabs" id="filter-tabs">
+    <button class="filter-tab active" data-cat="Todos">Todos</button>
+    <button class="filter-tab" data-cat="Itens que já tenho">Itens que já tenho</button>
+    <button class="filter-tab" data-cat="Kits Temáticos">Kits Temáticos</button>
+    <button class="filter-tab" data-cat="Conjuntos Divididos">Conjuntos Divididos</button>
+    <button class="filter-tab" data-cat="Itens Individuais">Itens Individuais</button>
+    <button class="filter-tab" data-cat="Itens Especiais">Itens Especiais</button>
+  </div>
+
+  <!-- GIFT GRID -->
+  <div class="container">
+    <div class="gift-grid" id="gift-grid">
+      <!-- Skeleton placeholders -->
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+      <div class="gift-card skeleton-card skeleton"></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p class="footer-names" data-config="nomes">[Nome da Noiva] &amp; [Nome do Noivo]</p>
+    <p data-config="dataEvento">20 de junho de 2026</p>
+    <p data-config="endereco">Rua Engenheiro Francelino Mota, 417</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let allItems = [];
+    let activeFilter = 'Todos';
+
+    async function loadItems() {
+      const grid = document.getElementById('gift-grid');
+      try {
+        const res = await App.apiFetch('/api/items');
+        if (!res.ok) throw new Error(res.error || 'Erro');
+        allItems = res.data;
+        renderGrid();
+        updateStats();
+      } catch (e) {
+        grid.innerHTML = `<p style="color:var(--red);padding:40px 0;grid-column:1/-1;text-align:center">Erro ao carregar lista. Recarregue a página.</p>`;
+      }
+    }
+
+    function updateStats() {
+      const available = allItems.filter(i => !i.reserved).length;
+      const reserved = allItems.filter(i => i.reserved).length;
+      const total = allItems.reduce((s, i) => s + i.price, 0);
+      document.getElementById('stats-subtitle').textContent =
+        `${allItems.length} presentes · ${reserved} reservados · ${available} disponíveis · Meta ${App.formatPrice(total)}`;
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('gift-grid');
+      const filtered = activeFilter === 'Todos'
+        ? allItems
+        : allItems.filter(i => i.cat === activeFilter);
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<p style="grid-column:1/-1;text-align:center;padding:60px 0;color:var(--text-muted)">Nenhum item nesta categoria.</p>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(item => `
+        <a href="/item.html?id=${item.id}"
+           class="gift-card${item.reserved ? ' reserved' : ''}"
+           ${item.reserved ? 'tabindex="-1" aria-disabled="true"' : ''}>
+          <div class="gift-emoji">${item.emoji}</div>
+          <div class="gift-name">${App.escapeHtml(item.name)}</div>
+          <div class="gift-price">${App.formatPrice(item.price)}</div>
+          <div>
+            <span class="badge ${item.reserved ? 'badge-reserved' : 'badge-available'}">
+              ${item.reserved ? 'Reservado' : 'Disponível'}
+            </span>
+          </div>
+        </a>
+      `).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadItems();
+
+      document.getElementById('filter-tabs').addEventListener('click', e => {
+        const tab = e.target.closest('.filter-tab');
+        if (!tab) return;
+        activeFilter = tab.dataset.cat;
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        renderGrid();
+      });
+    });
+  </script>
+</body>
+</html>

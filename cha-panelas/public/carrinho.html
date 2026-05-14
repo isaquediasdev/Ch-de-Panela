@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carrinho — Chá de Panelas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Chá de <span>Panelas</span></a>
+      <ul class="nav-links">
+        <li><a href="/lista.html">Lista de Presentes</a></li>
+        <li><a href="/carrinho.html" class="nav-cart">🛒 Carrinho <span class="cart-badge"></span></a></li>
+      </ul>
+      <div id="nav-user-area"></div>
+    </div>
+  </nav>
+
+  <div class="cart-page">
+    <div style="margin-bottom:24px;">
+      <a href="/lista.html" class="back-link">← Lista de Presentes</a>
+      <h1 style="font-size:2rem;">Meu Carrinho</h1>
+    </div>
+
+    <div id="cart-content">
+      <!-- Loaded by JS -->
+      <div class="skeleton" style="height:80px;border-radius:10px;margin-bottom:12px;"></div>
+      <div class="skeleton" style="height:80px;border-radius:10px;margin-bottom:12px;"></div>
+      <div class="skeleton" style="height:80px;border-radius:10px;margin-bottom:24px;"></div>
+      <div class="skeleton" style="height:120px;border-radius:10px;"></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p class="footer-names" data-config="nomes">[Nome da Noiva] &amp; [Nome do Noivo]</p>
+    <p data-config="dataEvento">20 de junho de 2026</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    async function checkAuth() {
+      const res = await App.apiFetch('/api/auth/me');
+      if (!res.ok) {
+        window.location.href = '/login.html?redirect=/carrinho.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function loadCart() {
+      const content = document.getElementById('cart-content');
+      const res = await App.apiFetch('/api/cart');
+      if (!res.ok) {
+        content.innerHTML = `<p style="color:var(--red)">Erro ao carregar carrinho.</p>`;
+        return;
+      }
+
+      const items = res.data;
+
+      if (items.length === 0) {
+        content.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🛒</div>
+            <h2>Seu carrinho está vazio</h2>
+            <p>Escolha presentes da nossa lista para adicionar ao carrinho.</p>
+            <a href="/lista.html" class="btn btn-primary">Ver Lista de Presentes</a>
+          </div>
+        `;
+        return;
+      }
+
+      const total = items.reduce((s, i) => s + i.price, 0);
+
+      content.innerHTML = `
+        <div class="cart-list" id="cart-list">
+          ${items.map(item => `
+            <div class="cart-item" id="cart-item-${item.id}">
+              <div class="cart-item-emoji">${item.emoji}</div>
+              <div class="cart-item-info">
+                <div class="cart-item-name">${App.escapeHtml(item.name)}</div>
+                <div class="cart-item-price">${App.formatPrice(item.price)}</div>
+              </div>
+              <div class="cart-item-remove">
+                <button class="btn btn-danger" onclick="removeItem(${item.id})">Remover</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="cart-summary">
+          <div class="cart-total">
+            <span>Total</span>
+            <span class="cart-total-value" id="cart-total">${App.formatPrice(total)}</span>
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
+            ${items.length} ${items.length === 1 ? 'presente' : 'presentes'} selecionado${items.length === 1 ? '' : 's'}
+          </p>
+          <button class="btn btn-primary btn-full" id="checkout-btn" onclick="checkout()">
+            Finalizar Pedido
+          </button>
+        </div>
+
+        <p style="text-align:center;font-size:0.82rem;color:var(--text-muted);margin-top:12px;">
+          Após finalizar, você receberá a chave PIX para confirmar o presente.
+        </p>
+      `;
+    }
+
+    async function removeItem(itemId) {
+      const el = document.getElementById(`cart-item-${itemId}`);
+      if (el) { el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; }
+
+      const res = await App.apiFetch(`/api/cart/${itemId}`, { method: 'DELETE' });
+      if (res.ok) {
+        App.showToast('Item removido do carrinho', 'info');
+        App.updateCartCount();
+        await loadCart();
+      } else {
+        if (el) { el.style.opacity = ''; el.style.pointerEvents = ''; }
+        App.showToast('Erro ao remover item', 'error');
+      }
+    }
+
+    async function checkout() {
+      const btn = document.getElementById('checkout-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = 'Processando...';
+
+      const res = await App.apiFetch('/api/orders', { method: 'POST' });
+
+      if (res.ok) {
+        App.updateCartCount();
+        window.location.href = `/confirmacao.html?orderId=${res.data.orderId}`;
+      } else {
+        App.showToast(res.error || 'Erro ao finalizar pedido', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Finalizar Pedido';
+        // Reload cart in case something changed
+        await loadCart();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const authed = await checkAuth();
+      if (authed) await loadCart();
+    });
+  </script>
+</body>
+</html>

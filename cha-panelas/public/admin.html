@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Chá de Panelas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Chá de <span>Panelas</span></a>
+      <ul class="nav-links">
+        <li><a href="/lista.html">Lista de Presentes</a></li>
+      </ul>
+      <span style="font-size:0.8rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.1em;">Painel Admin</span>
+    </div>
+  </nav>
+
+  <div class="admin-page">
+    <div class="container">
+
+      <!-- LOGIN PANEL -->
+      <div id="admin-login-section">
+        <div style="max-width:420px;margin:60px auto;text-align:center;">
+          <div style="font-size:2.5rem;margin-bottom:16px;">🔐</div>
+          <h1 style="margin-bottom:8px;">Painel Administrativo</h1>
+          <p style="color:var(--text-muted);margin-bottom:32px;font-size:0.9rem;">Digite a senha para acessar os pedidos</p>
+
+          <div class="form-card" style="text-align:left;">
+            <div class="form-error" id="admin-error"></div>
+            <div class="form-group">
+              <label for="admin-pw">Senha de administrador</label>
+              <input type="password" id="admin-pw" placeholder="Senha admin" autocomplete="off" />
+            </div>
+            <button class="btn btn-primary btn-full" id="admin-login-btn">Acessar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD (hidden until authenticated) -->
+      <div id="admin-dashboard" style="display:none;">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:28px;">
+          <div>
+            <h1 style="margin-bottom:4px;">Painel Administrativo</h1>
+            <p style="color:var(--text-muted);font-size:0.9rem;">Gestão de pedidos do Chá de Panelas</p>
+          </div>
+          <button class="btn btn-outline btn-sm" id="refresh-btn">Atualizar</button>
+        </div>
+
+        <!-- SUMMARY CARDS -->
+        <div class="admin-summary" id="admin-summary">
+          <div class="summary-card">
+            <div class="value" id="sum-paid">—</div>
+            <div class="label">Total Recebido</div>
+          </div>
+          <div class="summary-card">
+            <div class="value" id="sum-pending">—</div>
+            <div class="label">Aguardando PIX</div>
+          </div>
+          <div class="summary-card">
+            <div class="value" id="sum-guests">—</div>
+            <div class="label">Convidados</div>
+          </div>
+        </div>
+
+        <!-- ORDERS TABLE -->
+        <div id="orders-section">
+          <div class="table-wrap">
+            <table id="orders-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Convidado</th>
+                  <th>E-mail</th>
+                  <th>Presentes</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="orders-tbody">
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p class="footer-names" data-config="nomes">[Nome da Noiva] &amp; [Nome do Noivo]</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    let adminPw = '';
+
+    async function loadOrders() {
+      const tbody = document.getElementById('orders-tbody');
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">Carregando...</td></tr>`;
+
+      const res = await App.apiFetch(`/api/admin/orders?pw=${encodeURIComponent(adminPw)}`);
+
+      if (!res.ok) {
+        if (res.status === 403) {
+          App.showToast('Senha incorreta', 'error');
+          showLogin();
+        } else {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--red);padding:40px;">Erro ao carregar pedidos.</td></tr>`;
+        }
+        return;
+      }
+
+      const { orders, summary } = res.data;
+
+      // Update summary
+      document.getElementById('sum-paid').textContent = App.formatPrice(summary.totalPaid);
+      document.getElementById('sum-pending').textContent = App.formatPrice(summary.totalPending);
+      document.getElementById('sum-guests').textContent = summary.guests;
+
+      if (orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">Nenhum pedido ainda.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = orders.map(order => {
+        const date = new Date(order.created_at).toLocaleDateString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const itemNames = order.items.map(i => i.name).join(', ');
+        const statusBadge = order.status === 'paid'
+          ? `<span class="badge badge-paid">Pago</span>`
+          : `<span class="badge badge-pending">Pendente</span>`;
+        const actionBtn = order.status === 'pending'
+          ? `<button class="btn btn-sm btn-outline" onclick="markPaid(${order.id})">Marcar como Pago</button>`
+          : `<span style="color:var(--green);font-size:0.85rem;">✓ Confirmado</span>`;
+
+        return `
+          <tr id="order-row-${order.id}">
+            <td style="white-space:nowrap;font-size:0.82rem;">${date}</td>
+            <td style="font-weight:700;">${App.escapeHtml(order.user_name)}</td>
+            <td style="font-size:0.85rem;color:var(--text-muted);">${App.escapeHtml(order.user_email)}</td>
+            <td style="font-size:0.82rem;max-width:220px;">${App.escapeHtml(itemNames)}</td>
+            <td style="font-weight:700;color:var(--gold-dark);white-space:nowrap;">${App.formatPrice(order.total)}</td>
+            <td>${statusBadge}</td>
+            <td>${actionBtn}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function markPaid(orderId) {
+      const row = document.getElementById(`order-row-${orderId}`);
+      if (row) {
+        const btn = row.querySelector('button');
+        if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+      }
+
+      const res = await App.apiFetch(`/api/admin/orders/${orderId}/paid?pw=${encodeURIComponent(adminPw)}`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        App.showToast('Pedido marcado como pago!', 'success');
+        await loadOrders();
+      } else {
+        App.showToast(res.error || 'Erro ao atualizar pedido', 'error');
+        if (row) {
+          const btn = row.querySelector('button');
+          if (btn) { btn.disabled = false; btn.textContent = 'Marcar como Pago'; }
+        }
+      }
+    }
+
+    function showLogin() {
+      document.getElementById('admin-login-section').style.display = '';
+      document.getElementById('admin-dashboard').style.display = 'none';
+      adminPw = '';
+    }
+
+    function showDashboard() {
+      document.getElementById('admin-login-section').style.display = 'none';
+      document.getElementById('admin-dashboard').style.display = '';
+      loadOrders();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const loginBtn = document.getElementById('admin-login-btn');
+      const pwInput = document.getElementById('admin-pw');
+      const errorEl = document.getElementById('admin-error');
+
+      async function tryLogin() {
+        const pw = pwInput.value;
+        if (!pw) return;
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Verificando...';
+        errorEl.classList.remove('visible');
+
+        const res = await App.apiFetch(`/api/admin/orders?pw=${encodeURIComponent(pw)}`);
+
+        if (res.ok) {
+          adminPw = pw;
+          showDashboard();
+        } else {
+          errorEl.textContent = 'Senha incorreta.';
+          errorEl.classList.add('visible');
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Acessar';
+          pwInput.focus();
+        }
+      }
+
+      loginBtn.addEventListener('click', tryLogin);
+      pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
+
+      document.getElementById('refresh-btn').addEventListener('click', loadOrders);
+    });
+  </script>
+</body>
+</html>

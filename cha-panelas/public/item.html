@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Presente — Chá de Panelas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Chá de <span>Panelas</span></a>
+      <ul class="nav-links">
+        <li><a href="/lista.html">Lista de Presentes</a></li>
+        <li><a href="/carrinho.html" class="nav-cart">🛒 Carrinho <span class="cart-badge"></span></a></li>
+      </ul>
+      <div id="nav-user-area"></div>
+    </div>
+  </nav>
+
+  <div class="item-detail">
+    <a href="/lista.html" class="back-link">← Lista de Presentes</a>
+
+    <div class="item-detail-card" id="item-card">
+      <div class="skeleton" style="height:100px;width:100px;border-radius:50%;margin:0 auto 20px;"></div>
+      <div class="skeleton" style="height:20px;width:60%;margin:0 auto 12px;"></div>
+      <div class="skeleton" style="height:32px;width:80%;margin:0 auto 12px;"></div>
+      <div class="skeleton" style="height:16px;width:90%;margin:0 auto 20px;"></div>
+      <div class="skeleton" style="height:40px;width:120px;margin:0 auto;"></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p class="footer-names" data-config="nomes">[Nome da Noiva] &amp; [Nome do Noivo]</p>
+    <p data-config="dataEvento">20 de junho de 2026</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const itemId = parseInt(params.get('id'), 10);
+
+    async function loadItem() {
+      const card = document.getElementById('item-card');
+
+      if (!itemId) {
+        card.innerHTML = `<p style="color:var(--red)">Item não encontrado.</p>`;
+        return;
+      }
+
+      try {
+        // Load item and auth status in parallel
+        const [itemRes, meRes] = await Promise.all([
+          App.apiFetch(`/api/items/${itemId}`),
+          App.apiFetch('/api/auth/me'),
+        ]);
+
+        if (!itemRes.ok) {
+          card.innerHTML = `<p style="color:var(--red)">Item não encontrado.</p>`;
+          return;
+        }
+
+        const item = itemRes.data;
+        const isLoggedIn = meRes.ok;
+
+        document.title = `${item.name} — Chá de Panelas`;
+
+        // Check if item is already in cart
+        let inCart = false;
+        if (isLoggedIn) {
+          const cartRes = await App.apiFetch('/api/cart');
+          if (cartRes.ok) {
+            inCart = cartRes.data.some(ci => ci.id === item.id);
+          }
+        }
+
+        let actionHtml = '';
+
+        if (item.reserved) {
+          actionHtml = `
+            <div class="reserved-msg">
+              Este presente já foi reservado 💝<br>
+              <small style="opacity:0.8;margin-top:4px;display:block">Que tal escolher outro da lista?</small>
+            </div>
+            <a href="/lista.html" class="btn btn-outline" style="margin-top:16px;">Ver outros presentes</a>
+          `;
+        } else if (inCart) {
+          actionHtml = `
+            <div class="already-in-cart">
+              ✓ Já está no seu carrinho!
+            </div>
+            <a href="/carrinho.html" class="btn btn-primary" style="margin-top:16px;">Ver carrinho</a>
+          `;
+        } else if (!isLoggedIn) {
+          const redirect = encodeURIComponent(`/item.html?id=${itemId}`);
+          actionHtml = `
+            <a href="/login.html?redirect=${redirect}" class="btn btn-primary btn-full" style="margin-top:20px;">
+              Entrar para adicionar ao carrinho
+            </a>
+            <p style="text-align:center;margin-top:12px;font-size:0.85rem;color:var(--text-muted)">
+              Ainda não tem conta? <a href="/cadastro.html?redirect=${redirect}">Cadastre-se</a>
+            </p>
+          `;
+        } else {
+          actionHtml = `
+            <button class="btn btn-primary btn-full" id="add-cart-btn" style="margin-top:20px;">
+              Adicionar ao Carrinho
+            </button>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="item-emoji-large">${item.emoji}</div>
+          <p class="item-category">${App.escapeHtml(item.cat)}</p>
+          <h1>${App.escapeHtml(item.name)}</h1>
+          <p class="item-desc">${App.escapeHtml(item.desc)}</p>
+          <div class="item-price-large">${App.formatPrice(item.price)}</div>
+          <div>
+            <span class="badge ${item.reserved ? 'badge-reserved' : 'badge-available'}">
+              ${item.reserved ? 'Reservado' : 'Disponível'}
+            </span>
+          </div>
+          ${actionHtml}
+        `;
+
+        const addBtn = document.getElementById('add-cart-btn');
+        if (addBtn) {
+          addBtn.addEventListener('click', async () => {
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adicionando...';
+            try {
+              const res = await App.apiFetch('/api/cart', {
+                method: 'POST',
+                body: { itemId: item.id },
+              });
+              if (res.ok) {
+                App.showToast('Presente adicionado ao carrinho! 🎁', 'success');
+                App.updateCartCount();
+                // Refresh to show "in cart" state
+                setTimeout(() => loadItem(), 600);
+              } else {
+                App.showToast(res.error || 'Erro ao adicionar', 'error');
+                addBtn.disabled = false;
+                addBtn.textContent = 'Adicionar ao Carrinho';
+              }
+            } catch {
+              App.showToast('Erro de conexão. Tente novamente.', 'error');
+              addBtn.disabled = false;
+              addBtn.textContent = 'Adicionar ao Carrinho';
+            }
+          });
+        }
+
+      } catch (e) {
+        card.innerHTML = `<p style="color:var(--red)">Erro ao carregar. Recarregue a página.</p>`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadItem);
+  </script>
+</body>
+</html>

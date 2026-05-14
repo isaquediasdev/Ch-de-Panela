@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedido Confirmado — Chá de Panelas</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .payment-tabs { display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
+    .pay-tab {
+      flex:1; min-width:120px; padding:12px 8px; border:2px solid var(--border);
+      border-radius:10px; background:var(--card-bg); cursor:pointer;
+      font-family:inherit; font-size:0.85rem; font-weight:700; color:var(--text-muted);
+      transition:all .2s; text-align:center;
+    }
+    .pay-tab.active { border-color:var(--gold); color:var(--gold-dark); background:#fffbf4; }
+    .pay-tab .tab-icon { font-size:1.5rem; display:block; margin-bottom:4px; }
+    .pay-panel { display:none; }
+    .pay-panel.active { display:block; }
+
+    /* PIX */
+    .pix-qr-wrap { text-align:center; margin:16px 0; }
+    .pix-qr-wrap img { border-radius:12px; max-width:260px; width:100%; }
+    .pix-copy-row {
+      display:flex; align-items:center; gap:8px; background:#f5f0e8;
+      border:1px dashed var(--gold); border-radius:8px; padding:10px 14px;
+      margin:12px 0;
+    }
+    .pix-copy-key { flex:1; font-size:0.8rem; word-break:break-all; color:var(--text); }
+    .btn-copy {
+      flex-shrink:0; padding:6px 14px; font-size:0.8rem; background:var(--gold);
+      color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:700;
+      font-family:inherit; transition:background .2s;
+    }
+    .btn-copy:hover { background:var(--gold-dark); }
+    .pix-hint { font-size:0.78rem; color:var(--text-muted); text-align:center; }
+
+    /* Transferência */
+    .bank-table { width:100%; border-collapse:collapse; margin:12px 0; }
+    .bank-table tr td { padding:10px 8px; border-bottom:1px solid var(--border); font-size:0.9rem; }
+    .bank-table tr td:first-child { color:var(--text-muted); font-weight:600; width:40%; }
+
+    /* Cartão */
+    .card-coming { text-align:center; padding:24px 16px; }
+    .card-coming .big-icon { font-size:3rem; margin-bottom:12px; }
+    .processor-list { list-style:none; padding:0; margin:16px 0; text-align:left; }
+    .processor-list li {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 0; border-bottom:1px solid var(--border); font-size:0.85rem;
+    }
+    .processor-list li:last-child { border-bottom:none; }
+    .proc-name { font-weight:700; }
+    .proc-rate { color:var(--gold-dark); font-weight:700; }
+    .proc-note { font-size:0.75rem; color:var(--text-muted); }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Chá de <span>Panelas</span></a>
+      <ul class="nav-links">
+        <li><a href="/lista.html">Lista de Presentes</a></li>
+        <li><a href="/carrinho.html" class="nav-cart">🛒 Carrinho <span class="cart-badge"></span></a></li>
+      </ul>
+      <div id="nav-user-area"></div>
+    </div>
+  </nav>
+
+  <div class="confirm-page" id="confirm-page">
+    <div class="skeleton" style="height:80px;width:80px;border-radius:50%;margin:0 auto 24px;"></div>
+    <div class="skeleton" style="height:40px;width:70%;margin:0 auto 12px;"></div>
+    <div class="skeleton" style="height:20px;width:85%;margin:0 auto 36px;"></div>
+    <div class="skeleton" style="height:200px;border-radius:10px;margin-bottom:20px;"></div>
+    <div class="skeleton" style="height:220px;border-radius:10px;"></div>
+  </div>
+
+  <footer>
+    <p class="footer-names" data-config="nomes">Ana Clara &amp; Isaque</p>
+    <p data-config="dataEvento">20 de junho de 2026</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    async function loadConfirmation() {
+      const page = document.getElementById('confirm-page');
+      const params = new URLSearchParams(window.location.search);
+      const orderId = parseInt(params.get('orderId'), 10);
+
+      const [ordersRes, configRes] = await Promise.all([
+        App.apiFetch('/api/orders/me'),
+        App.apiFetch('/api/config'),
+      ]);
+
+      if (!ordersRes.ok) { window.location.href = '/login.html'; return; }
+
+      const orders = ordersRes.data;
+      const order = orderId ? orders.find(o => o.id === orderId) : orders[0];
+
+      if (!order) {
+        page.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">😕</div>
+            <h2>Pedido não encontrado</h2>
+            <a href="/lista.html" class="btn btn-primary">Ver Lista de Presentes</a>
+          </div>`;
+        return;
+      }
+
+      const cfg = configRes.ok ? configRes.data : {};
+      const bank = cfg.bank || {};
+
+      page.innerHTML = `
+        <div class="confirm-icon">💝</div>
+        <h1>Obrigada pelo seu presente!</h1>
+        <p class="lead">
+          ${order.items.length === 1 ? 'Seu presente foi' : 'Seus presentes foram'} reservado${order.items.length === 1 ? '' : 's'} com sucesso.
+          Agora escolha como enviar o valor e finalize sua participação!
+        </p>
+
+        <div class="order-items-list">
+          <p style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:12px;font-weight:700;">
+            Presentes Reservados
+          </p>
+          ${order.items.map(item => `
+            <div class="order-item-row">
+              <div class="order-item-name">
+                <span>${item.emoji || '🎁'}</span>
+                <span>${App.escapeHtml(item.name)}</span>
+              </div>
+              <span style="font-weight:700;color:var(--gold-dark);white-space:nowrap;">${App.formatPrice(item.price)}</span>
+            </div>
+          `).join('')}
+          <div class="order-item-row" style="padding-top:14px;margin-top:4px;border-top:2px solid var(--border);border-bottom:none;">
+            <strong>Total a enviar</strong>
+            <strong style="color:var(--gold-dark);font-size:1.1rem;">${App.formatPrice(order.total)}</strong>
+          </div>
+        </div>
+
+        <div class="pix-box" style="padding:24px;">
+          <h3 style="margin-bottom:20px;">Como você prefere enviar?</h3>
+
+          <div class="payment-tabs">
+            <button class="pay-tab active" onclick="showTab('pix', this)">
+              <span class="tab-icon">📱</span>PIX
+            </button>
+            <button class="pay-tab" onclick="showTab('transfer', this)">
+              <span class="tab-icon">🏦</span>Transferência
+            </button>
+            <button class="pay-tab" onclick="showTab('card', this)">
+              <span class="tab-icon">💳</span>Cartão
+            </button>
+          </div>
+
+          <!-- PIX -->
+          <div class="pay-panel active" id="panel-pix">
+            <div class="pix-qr-wrap" id="pix-qr-area">
+              <div class="skeleton" style="height:260px;width:260px;border-radius:12px;margin:0 auto;"></div>
+            </div>
+            <div class="pix-copy-row" id="pix-copy-row" style="display:none;">
+              <span class="pix-copy-key" id="pix-payload">—</span>
+              <button class="btn-copy" onclick="copyPix()">Copiar</button>
+            </div>
+            <p class="pix-hint">Abra o app do seu banco → Pix → Pix Copia e Cola (ou escaneie o QR Code).</p>
+            <p class="pix-hint" style="margin-top:6px;">Guarde o comprovante 🧾</p>
+          </div>
+
+          <!-- TRANSFERÊNCIA -->
+          <div class="pay-panel" id="panel-transfer">
+            ${bank.banco ? `
+              <table class="bank-table">
+                <tr><td>Banco</td><td><strong>${App.escapeHtml(bank.banco)}</strong></td></tr>
+                <tr><td>Agência</td><td>${App.escapeHtml(bank.agencia)}</td></tr>
+                <tr><td>Conta</td><td>${App.escapeHtml(bank.conta)}</td></tr>
+                <tr><td>Tipo</td><td>${App.escapeHtml(bank.tipo)}</td></tr>
+                <tr><td>Titular</td><td>${App.escapeHtml(bank.titular)}</td></tr>
+                ${bank.cpf ? `<tr><td>CPF</td><td>${App.escapeHtml(bank.cpf)}</td></tr>` : ''}
+                <tr><td>Valor</td><td><strong style="color:var(--gold-dark);">${App.formatPrice(order.total)}</strong></td></tr>
+              </table>
+              <p class="pix-hint">Use o comprovante de transferência como confirmação. 💕</p>
+            ` : '<p style="color:var(--text-muted);text-align:center;padding:16px 0;">Dados bancários ainda não configurados. Entre em contato com os noivos.</p>'}
+          </div>
+
+          <!-- CARTÃO -->
+          <div class="pay-panel" id="panel-card">
+            <div class="card-coming">
+              <div class="big-icon">💳</div>
+              <h3 style="margin-bottom:8px;">Pagamento por cartão</h3>
+              ${cfg.cardEnabled ? `
+                <p style="color:var(--text-muted);margin-bottom:20px;">
+                  Você será redirecionada para a página segura de pagamento.
+                  Aceitamos cartão de crédito em até 12x.
+                </p>
+                <button
+                  id="btn-pay-card"
+                  class="btn btn-primary"
+                  style="width:100%;margin-bottom:12px;"
+                  onclick="payWithCard(${order.id})">
+                  Pagar R$ ${App.formatPrice(order.total).replace('R$ ', '')} com Cartão
+                </button>
+                <p style="font-size:0.75rem;color:var(--text-muted);">Você será redirecionado para o ambiente seguro Pagar.me 🔒</p>
+              ` : `
+                <p style="color:var(--text-muted);margin-bottom:20px;">
+                  Estamos configurando o pagamento por cartão. Em breve essa opção estará disponível!
+                </p>
+                <p style="font-size:0.85rem;font-weight:700;margin-bottom:12px;">
+                  Enquanto isso, use PIX ou Transferência — é mais rápido e sem taxas para você! 🙏
+                </p>
+              `}
+            </div>
+          </div>
+        </div>
+
+        <a href="/lista.html" class="btn btn-outline" style="margin-bottom:12px;">Ver Lista de Presentes</a>
+      `;
+
+      // Load PIX QR code
+      loadPixQR(order.id);
+    }
+
+    async function loadPixQR(orderId) {
+      const res = await App.apiFetch(`/api/pix-qr?orderId=${orderId}`);
+      const area = document.getElementById('pix-qr-area');
+      const copyRow = document.getElementById('pix-copy-row');
+      const payloadEl = document.getElementById('pix-payload');
+
+      if (!area) return;
+
+      if (res.ok) {
+        area.innerHTML = `<img src="${res.data.qrCode}" alt="QR Code PIX" />`;
+        if (payloadEl) payloadEl.textContent = res.data.payload;
+        if (copyRow) copyRow.style.display = 'flex';
+      } else {
+        area.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;">${App.escapeHtml(res.error || 'Não foi possível gerar o QR Code.')}<br>Use a chave PIX ou Transferência.</p>`;
+      }
+    }
+
+    function showTab(tab, btn) {
+      document.querySelectorAll('.pay-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.pay-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + tab).classList.add('active');
+    }
+
+    function copyPix() {
+      const payload = document.getElementById('pix-payload').textContent;
+      navigator.clipboard.writeText(payload).then(() => App.showToast('Código PIX copiado!', 'success'));
+    }
+
+    async function payWithCard(orderId) {
+      const btn = document.getElementById('btn-pay-card');
+      if (btn) { btn.disabled = true; btn.textContent = 'Aguarde...'; }
+      const res = await App.apiFetch('/api/card-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      if (res.ok && res.data.url) {
+        window.location.href = res.data.url;
+      } else {
+        App.showToast(res.error || 'Não foi possível iniciar o pagamento.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Tentar novamente'; }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadConfirmation);
+  </script>
+</body>
+</html>
