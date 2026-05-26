@@ -14,6 +14,25 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-05-26] — Claude — Access verified (Vercel + Cloudflare) + domain = isana.ia.br
+- **Domain:** `isana.ia.br` (DNS on Cloudflare). Proposed chá subdomain:
+  **`presentes.isana.ia.br`** (pending user OK; `casamento.` is already taken).
+- **Vercel:** team "Isaque's projects" (`team_X6djzH2eg3IbgVr8yurfn6yk`). Existing
+  projects: juda, countdown, fincontrol, leticia-50, **casamento**. ⚠️ "casamento" is a
+  **separate Vite app** already serving `casamento.isana.ia.br` — NOT our chá. We must
+  create a **NEW Vercel project** for this repo (`Ch-de-Panela`).
+- **Cloudflare:** account `cca2706351d43ee2c7ac894059541c97`
+  (Isaquebarbosa.dev@gmail.com). ⚠️ The connected Cloudflare MCP is Workers/D1/KV/R2-
+  focused — **no DNS-record tools visible**. The chá subdomain DNS may need an API token
+  or the dashboard.
+- **Supabase:** API URL `https://fwhnsizxqthbugviraoo.supabase.co`.
+- **Blocker (need from Isaque):** Supabase **service_role** secret key — NOT exposed via
+  MCP; copy from Supabase dashboard → Project Settings → API. Needed as a Vercel env var
+  (`SUPABASE_SERVICE_ROLE_KEY`) + local `.env` so the serverless functions can read/write
+  the DB. Also will need a `JWT_SECRET` (any long random string) for cookie auth.
+- **Next / open:** confirm subdomain + get service_role key → then build migration
+  (Express → `/api/*` serverless + Supabase + JWT cookie auth) and deploy via Vercel MCP.
+
 ## [2026-05-26] — Claude — Supabase project + schema created
 - **What:** Created dedicated Supabase project **cha-panelas-isana** (ref
   `fwhnsizxqthbugviraoo`, sa-east-1, free $0/mo) and applied migration `initial_schema`:
