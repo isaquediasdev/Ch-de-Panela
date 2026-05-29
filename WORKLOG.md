@@ -14,6 +14,109 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-05-27 03:00] — Claude — HANDOFF.md atualizado + commit dos artefatos do deploy
+- **What:** A Ana pediu pra documentar tudo (vai abrir num novo chat). Reescrevi o
+  `HANDOFF.md` pra refletir o estado REAL atual: o site já está em
+  `https://cha-panelas.vercel.app` (deployed), Brevo integrado, falta SÓ o DNS no
+  Cloudflare (4 registros Brevo + 1 CNAME pro subdomínio do chá).
+- **Commit do deploy ainda não estava no Git:** `api/index.js`, `vercel.json`,
+  `.vercelignore`, edits em `server.js` (Brevo + SHOW_DEV_CODE + dotenv quiet),
+  `package.json`/`lock` (jose ^5), `.gitignore` (+.vercel) e as entradas anteriores
+  do WORKLOG só existiam local. Commito todos juntos agora pra o próximo chat ver
+  o estado real ao puxar o repo. `.env` continua gitignored.
+- **Files:** `HANDOFF.md` (reescrito), `WORKLOG.md` (esta entrada).
+- **Next:** Próximo chat → começar em `HANDOFF.md` → seção **PRÓXIMOS PASSOS**.
+  Resumo: casal insere DNS no Cloudflare → autenticar domínio Brevo → setar
+  `BREVO_API_KEY`+`EMAIL_FROM` na Vercel + remover `SHOW_DEV_CODE` → redeploy →
+  CNAME `cha` no Cloudflare → adicionar domínio no projeto Vercel.
+
+## [2026-05-27 02:25] — Claude — Brevo OK (IP liberado) + domínio add; faltam DNS
+- **IP restriction desligada** → chave de API do Brevo funciona (200). Conta **Isana**
+  (`isaquebarbosa.dev@gmail.com`), free 300/dia. Remetente ativo já existe:
+  `isaquebarbosa.dev@gmail.com` (id 1). SMTP relay (caso precise): user
+  `aca682001@smtp-brevo.com`, `smtp-relay.brevo.com:587`.
+- **Domínio `isana.ia.br` adicionado no Brevo** (id `6a1655c39ca547d25903c24f`,
+  authenticated:false). Registros DNS p/ autenticar (Brevo detectou provider=Cloudflare):
+  - `CNAME brevo1._domainkey` → `b1.isana-ia-br.dkim.brevo.com`  (DNS only / sem proxy)
+  - `CNAME brevo2._domainkey` → `b2.isana-ia-br.dkim.brevo.com`  (DNS only / sem proxy)
+  - `TXT @` → `brevo-code:7862b9f89b71bb19475e6628497e6a36`
+  - `TXT _dmarc` → `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com`  (opcional, status já true)
+- **Cloudflare MCP NÃO edita DNS** (só Workers/D1/KV/R2 + docs). Preciso de **token de
+  API Cloudflare** (template "Edit zone DNS", zona `isana.ia.br`) OU casal no painel.
+- **Próximo:** DNS no Cloudflare → autenticar domínio no Brevo → setar
+  `BREVO_API_KEY`+`EMAIL_FROM` na Vercel → teste real de envio → **remover
+  SHOW_DEV_CODE** → redeploy → `CNAME cha.isana.ia.br` → Vercel.
+
+## [2026-05-26 23:40] — Claude — Brevo via API HTTP + bloqueio de IP descoberto
+- **Change:** `sendLoginCodeEmail` agora envia pela **API HTTP do Brevo**
+  (`POST /v3/smtp/email`, header `api-key`) quando `BREVO_API_KEY` está setada; SMTP/
+  nodemailer vira fallback. Melhor p/ serverless (sem conexão SMTP). Chave do Brevo
+  (a "MCP key" base64 que o casal mandou = `{"api_key":"xkeysib-…"}`) decodificada e
+  guardada no `.env` (gitignored). **NÃO setada na Vercel ainda** — senão quebraria o
+  modo devCode atual antes do domínio estar autenticado.
+- **Bloqueio:** a chave de API veio com **"Authorised IPs" ativo** no Brevo → toda
+  chamada dá `401 unrecognised IP`. Vercel não tem IP de saída fixo → tem que
+  **DESLIGAR a restrição de IP** (app.brevo.com/security/authorised_ips), não
+  whitelistar. Trava testes da API + autenticação de domínio até desligar.
+- **Files:** `server.js` (sendLoginCodeEmail reescrito), `.env` (+BREVO_API_KEY,
+  +EMAIL_HOST/PORT/SECURE Brevo, +EMAIL_FROM). Code change ainda NÃO redeployado
+  (inerte na Vercel sem BREVO_API_KEY → devCode segue funcionando).
+- **Aguardando casal:** (1) desligar Authorised IPs no Brevo; (2) acesso Cloudflare
+  (token DNS ou painel). Depois (Claude): validar chave → add domínio via API → pegar
+  DNS → Cloudflare → autenticar → setar BREVO_API_KEY+EMAIL_FROM na Vercel → teste
+  real → remover SHOW_DEV_CODE → redeploy → apontar cha.isana.ia.br.
+
+## [2026-05-26 23:10] — Claude — E-mail OTP: escolhido Brevo + suporte a EMAIL_FROM
+- **Decisão (casal):** serviço de envio do código de login = **Brevo** (SMTP, plano
+  grátis 300/dia, remetente do domínio). Resend foi a alternativa avaliada (entrega
+  ligeiramente melhor, mas teto de 100/dia) — escolhido Brevo pela folga diária + PT-BR.
+- **Change:** `server.js` agora aceita **`EMAIL_FROM`** separado do `EMAIL_USER` (no
+  Brevo o login SMTP ≠ endereço remetente). Fallback p/ EMAIL_USER se EMAIL_FROM vazio
+  (Gmail continua funcionando sem mudança). `.env` pré-preenchido com SMTP do Brevo
+  (`smtp-relay.brevo.com:587`, secure=false, EMAIL_FROM=cha@isana.ia.br).
+- **Files:** `server.js` (CONFIG.email.from + uso no campo `from`), `.env`.
+- **Aguardando do casal:** (1) criar conta Brevo + gerar **chave SMTP**; (2) adicionar
+  domínio no Brevo → ele gera **registros DNS** (DKIM/verificação); (3) **acesso ao
+  Cloudflare** (token DNS ou painel) p/ inserir os registros.
+- **Depois (Claude):** setar EMAIL_* na Vercel (Production) → autenticar domínio →
+  enviar e-mail de teste real → **remover SHOW_DEV_CODE** → redeploy. Aí o domínio
+  `cha.isana.ia.br` pode ser apontado.
+
+## [2026-05-26 22:35] — Claude — Deploy na Vercel no ar (cha-panelas.vercel.app) ✅
+- **What:** Empacotei o Express pra Vercel e publiquei em **produção**. Site testado
+  **ponta a ponta** contra o Supabase real: estático (8 páginas → 200), API pública
+  (config / items / stats), login por cookie JWT (verify→me), carrinho, checkout
+  atômico (`place_order`), admin (senha certa 200 / errada 403). Banco **truncado**
+  de novo (0 linhas) após o teste → base limpa.
+- **URL de teste:** https://cha-panelas.vercel.app — projeto `cha-panelas`
+  (`prj_qLWJK1NfQUoBRVCe8oblYGq779XE`, time `team_X6djzH2eg3IbgVr8yurfn6yk`).
+- **Bug achado/corrigido:** `jose` v6 é **ESM-only**; `require('jose')` quebrava no
+  Node da Vercel → `server.js` não carregava → TODA rota `/api/*` dava 500
+  `FUNCTION_INVOCATION_FAILED` (estático funcionava). Fix: **`jose@^5`** (dual
+  CJS/ESM, API idêntica, 0 mudança de código). Local passava por usar Node 22.12+
+  (require-esm nativo).
+- **Files:** `api/index.js` (entrypoint serverless → reexporta o app de server.js),
+  `vercel.json` (rewrite `/api/(.*)`→`/api/index`; `public/` servido estático pela
+  Vercel), `.vercelignore` (não sobe `.env`/`*.db`/`node_modules`/`*.md`), `.gitignore`
+  (+`.vercel`), `server.js` (flag `SHOW_DEV_CODE` + `dotenv {quiet:true}`),
+  `package.json`/`lock` (jose ^6→^5).
+- **Env vars (Production, via `vercel env add` lendo do `.env`):** SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY, JWT_SECRET, ADMIN_PASSWORD, SHOW_DEV_CODE=true.
+  ⚠️ Não existe tool de env var no MCP da Vercel — feito pelo CLI (logado como
+  `isaquebarbosadev-1000`).
+- **Modo teste:** sem e-mail configurado, `SHOW_DEV_CODE=true` devolve o código de
+  login na resposta (mostra na tela). A Vercel força `NODE_ENV=production` no runtime,
+  então o gate antigo (`NODE_ENV!==production`) nunca mostraria o código. ⚠️ INSEGURO
+  pro público — qualquer um loga como qualquer e-mail. Só pra teste no link `.vercel.app`.
+- **Next / open (2 bloqueios, dependem do casal):**
+  1. **E-mail OTP** (Isaque/Zoho): setar EMAIL_* na Vercel → remover SHOW_DEV_CODE →
+     redeploy. Só então é seguro abrir pro público.
+  2. **DNS `cha.isana.ia.br`** (Cloudflare): apontar SÓ depois do e-mail. Adicionar
+     domínio no projeto Vercel + CNAME no Cloudflare. MCP Cloudflare não tem tool de
+     DNS → precisa de API token ou dashboard.
+- **Deploy é direto via CLI** (não ligado ao GitHub ainda) — futuras mudanças exigem
+  `vercel deploy --prod` ou conectar o repo `isaquediasdev/Ch-de-Panela` na Vercel.
+
 ## [2026-05-26] — Claude — Backend migrated to Supabase + JWT (tested locally) ✅
 - **What:** Rewrote `server.js` to use **Supabase** (instead of better-sqlite3) and a
   **stateless JWT cookie** (instead of express-session). New shared modules:

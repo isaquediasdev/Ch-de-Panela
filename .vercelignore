@@ -1,0 +1,11 @@
+node_modules
+.git
+.vercel
+.env
+.env.example
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+*.md
+docs

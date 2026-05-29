@@ -1,5 +1,5 @@
 'use strict';
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+require('dotenv').config({ path: require('path').join(__dirname, '.env'), quiet: true });
 
 // ============================================================
 // CONFIG
@@ -28,6 +28,9 @@ const CONFIG = {
   email: {
     user: process.env.EMAIL_USER || '',
     appPassword: process.env.EMAIL_APP_PASSWORD || '',
+    // Remetente do e-mail. No Brevo o login SMTP (EMAIL_USER) != endereço remetente,
+    // então usamos EMAIL_FROM. Se vazio, cai no EMAIL_USER (ex.: Gmail).
+    from: process.env.EMAIL_FROM || '',
   },
 
   adminPassword: process.env.ADMIN_PASSWORD || 'Isana2026@',
@@ -103,11 +106,9 @@ function getMailTransport() {
   return _mailTransport;
 }
 async function sendLoginCodeEmail(to, code) {
-  const transport = getMailTransport();
-  if (!transport) {
-    console.log(`\n  [CÓDIGO DE LOGIN - modo teste] ${to} -> ${code}\n`);
-    return false;
-  }
+  const subject = `Seu código de acesso: ${code}`;
+  const fromAddr = CONFIG.email.from || CONFIG.email.user;
+  const fromName = `Chá de Panelas — ${CONFIG.nomes}`;
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;background:#FDFBF8;padding:36px 28px;border-radius:14px;border:1px solid #ecdfce;">
       <h1 style="color:#3D2B1F;font-size:22px;text-align:center;margin:0 0 2px;">Chá de Panelas</h1>
@@ -118,10 +119,34 @@ async function sendLoginCodeEmail(to, code) {
       </div>
       <p style="color:#9a8c7a;font-size:13px;text-align:center;line-height:1.6;">O código vale por 10 minutos.<br>Se não foi você que pediu, é só ignorar este e-mail. 💝</p>
     </div>`;
-  await transport.sendMail({
-    from: `"Chá de Panelas — ${CONFIG.nomes}" <${CONFIG.email.user}>`,
-    to, subject: `Seu código de acesso: ${code}`, html,
-  });
+
+  // 1) Brevo — API HTTP (recomendado em serverless/Vercel; sem conexão SMTP persistente)
+  if (process.env.BREVO_API_KEY) {
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: fromName, email: fromAddr },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+    if (!resp.ok) throw new Error(`Brevo API ${resp.status}: ${await resp.text()}`);
+    return true;
+  }
+
+  // 2) SMTP (nodemailer) — fallback p/ outros provedores (ex.: Gmail)
+  const transport = getMailTransport();
+  if (!transport) {
+    console.log(`\n  [CÓDIGO DE LOGIN - modo teste] ${to} -> ${code}\n`);
+    return false;
+  }
+  await transport.sendMail({ from: `"${fromName}" <${fromAddr}>`, to, subject, html });
   return true;
 }
 
@@ -149,7 +174,12 @@ async function issueCode(res, { email, name, phone }) {
   catch (e) { console.error('[E-mail]', e.message); return fail(res, 502, 'Não conseguimos enviar o e-mail. Confira o endereço e tente de novo.'); }
 
   const payload = { sent, email };
-  if (!sent && process.env.NODE_ENV !== 'production') payload.devCode = code;
+  // Modo de teste pré-lançamento (e-mail ainda não configurado): devolve o código
+  // na própria resposta pra mostrar na tela. Local: NODE_ENV != production.
+  // Na Vercel/produção: defina SHOW_DEV_CODE=true.
+  // ⚠️ REMOVER o SHOW_DEV_CODE assim que o envio por e-mail estiver ativo.
+  const showDevCode = process.env.SHOW_DEV_CODE === 'true' || process.env.NODE_ENV !== 'production';
+  if (!sent && showDevCode) payload.devCode = code;
   return ok(res, payload);
 }
 
