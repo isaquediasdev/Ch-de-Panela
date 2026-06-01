@@ -14,6 +14,33 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-01] — Claude — Flash de nomes corrigido; DNS pendente (aguardando token)
+- **What:** Substituído o placeholder `[Nome da Noiva] & [Nome do Noivo]` pelo nome real
+  `Ana Clara & Isaque` direto no HTML de todas as páginas (`index.html`, `lista.html`,
+  `carrinho.html`, `item.html`, `admin.html`). O `data-config="nomes"` continua e
+  sobrescreve com o mesmo valor da API — sem flash. Título da aba também corrigido.
+  Para o DNS no Cloudflare (5 registros: 2 CNAME DKIM Brevo + 1 TXT verificação Brevo
+  + 1 TXT DMARC + 1 CNAME `cha` → Vercel), precisa de API token com `Zone:DNS:Edit`
+  ou inserção manual no painel.
+- **Files:** `public/index.html`, `public/lista.html`, `public/carrinho.html`,
+  `public/item.html`, `public/admin.html`.
+- **Next / open:** Isaque gera API token Cloudflare (Edit zone DNS, zona isana.ia.br)
+  OU insere os 5 registros manualmente → Claude autentica domínio Brevo → seta
+  BREVO_API_KEY+EMAIL_FROM na Vercel → remove SHOW_DEV_CODE → redeploy → adiciona
+  domínio cha.isana.ia.br no projeto Vercel.
+
+## [2026-05-29 14:57] — Codex — DNS Cloudflare ainda pendente
+- **What:** Li `HANDOFF.md`, `WORKLOG.md`, `AGENTS.md`, `CLAUDE.md` e `MEMORY.md`.
+  Confirmei por DNS público que ainda não existem os CNAMEs DKIM do Brevo
+  (`brevo1._domainkey`, `brevo2._domainkey`), o TXT de verificação Brevo no apex, nem
+  o CNAME `cha.isana.ia.br`. Também confirmei que não há token Cloudflare no `.env`;
+  só `BREVO_API_KEY` e `EMAIL_FROM` estão presentes localmente.
+- **Files:** `WORKLOG.md`.
+- **Next / open:** Inserir registros no Cloudflare pelo painel ou fornecer API token
+  Cloudflare com `Zone:DNS:Edit` para a zona `isana.ia.br`; depois autenticar Brevo,
+  configurar env vars na Vercel, remover `SHOW_DEV_CODE`, redeployar e só então apontar
+  `cha.isana.ia.br` para a Vercel.
+
 ## [2026-05-27 03:00] — Claude — HANDOFF.md atualizado + commit dos artefatos do deploy
 - **What:** A Ana pediu pra documentar tudo (vai abrir num novo chat). Reescrevi o
   `HANDOFF.md` pra refletir o estado REAL atual: o site já está em
