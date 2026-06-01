@@ -21,8 +21,16 @@ const CONFIG = {
     tipo: 'Conta Corrente', titular: 'Ana Clara', cpf: '',
   },
 
-  // ── PAGAMENTO POR CARTÃO (a definir: plataforma) ──────────────
-  cardEnabled: false,
+  // ── INFINITEPAY ───────────────────────────────────────────────
+  // Setar INFINITEPAY_HANDLE com o InfiniteTag da conta (sem o $).
+  // Quando presente, habilita o botão de cartão/Pix InfinitePay na confirmação.
+  infinitepay: {
+    handle: process.env.INFINITEPAY_HANDLE || '',
+    apiUrl: 'https://api.checkout.infinitepay.io/links',
+    // URL pública do site — usada no redirect e no webhook
+    siteUrl: process.env.SITE_URL || 'https://cha.isana.ia.br',
+  },
+  get cardEnabled() { return !!this.infinitepay.handle; },
 
   // ── E-MAIL (código de login) ──────────────────────────────────
   email: {
@@ -32,6 +40,9 @@ const CONFIG = {
     // então usamos EMAIL_FROM. Se vazio, cai no EMAIL_USER (ex.: Gmail).
     from: process.env.EMAIL_FROM || '',
   },
+
+  // ── PAGAMENTO POR CARTÃO (mantido para retrocompatibilidade) ──
+  // cardEnabled agora é um getter acima — não declarar aqui de novo
 
   adminPassword: process.env.ADMIN_PASSWORD || 'Isana2026@',
   port: process.env.PORT || 3000,
@@ -385,6 +396,83 @@ app.post('/api/admin/orders/:id/cancel', requireAdmin, async (req, res) => {
   // order_items e reserved_items têm ON DELETE CASCADE → liberam o presente
   await supabase.from('orders').delete().eq('id', id);
   return ok(res, { orderId: id, cancelled: true });
+});
+
+// ── INFINITEPAY — criar link de pagamento ────────────────────
+async function createInfinitePayLink(order, items) {
+  const { handle, apiUrl, siteUrl } = CONFIG.infinitepay;
+  const body = {
+    handle,
+    order_nsu: String(order.id),
+    redirect_url: `${siteUrl}/confirmacao.html?orderId=${order.id}&paid=1`,
+    webhook_url: `${siteUrl}/api/webhooks/infinitepay`,
+    items: items.map(i => ({
+      quantity: 1,
+      price: Math.round(Number(i.price) * 100), // centavos
+      description: i.name,
+    })),
+  };
+  const resp = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`InfinitePay ${resp.status}: ${text}`);
+  }
+  return resp.json(); // { url, ... }
+}
+
+// ── CARTÃO / INFINITEPAY — gerar link ────────────────────────
+app.post('/api/card-link', requireAuth, async (req, res) => {
+  if (!CONFIG.cardEnabled) return fail(res, 503, 'Pagamento por cartão ainda não configurado.');
+  const { orderId } = req.body;
+  if (!orderId) return fail(res, 400, 'orderId obrigatório');
+  const { data: order } = await supabase.from('orders')
+    .select('id, total, status').eq('id', orderId).eq('user_id', req.user.id).maybeSingle();
+  if (!order) return fail(res, 404, 'Pedido não encontrado');
+  if (order.status === 'paid') return fail(res, 409, 'Pedido já está pago');
+
+  const { data: ois } = await supabase.from('order_items').select('item_id, price').eq('order_id', order.id);
+  const items = (ois || []).map(oi => {
+    const it = ITEMS.find(i => i.id === oi.item_id);
+    return { id: oi.item_id, name: it ? it.name : `Presente #${oi.item_id}`, price: Number(oi.price) };
+  });
+
+  try {
+    const link = await createInfinitePayLink(order, items);
+    // Registrar método de pagamento
+    await supabase.from('orders').update({ payment_method: 'cartao_infinitepay' }).eq('id', order.id);
+    return ok(res, { url: link.url || link.checkout_url || link.link });
+  } catch (e) {
+    console.error('[InfinitePay]', e.message);
+    return fail(res, 502, 'Não foi possível gerar o link de pagamento. Tente PIX ou contate os noivos.');
+  }
+});
+
+// ── WEBHOOK INFINITEPAY — confirmar pagamento ────────────────
+// InfinitePay envia POST com { order_nsu, paid_amount, ... }
+// Responder 200 = sucesso; 400 = retry.
+app.post('/api/webhooks/infinitepay', express.json(), async (req, res) => {
+  const { order_nsu, paid_amount, capture_method } = req.body || {};
+  const orderId = parseInt(order_nsu, 10);
+  if (!orderId) return res.status(400).json({ error: 'order_nsu ausente' });
+
+  const { data: order } = await supabase.from('orders').select('id, total, status').eq('id', orderId).maybeSingle();
+  if (!order) return res.status(400).json({ error: 'Pedido não encontrado' });
+  if (order.status === 'paid') return res.status(200).json({ ok: true, already: true });
+
+  // paid_amount vem em centavos
+  const paidReais = paid_amount ? paid_amount / 100 : null;
+  await supabase.from('orders').update({
+    status: 'paid',
+    payment_method: capture_method || 'cartao_infinitepay',
+    ...(paidReais !== null ? { paid_amount: paidReais } : {}),
+  }).eq('id', orderId);
+
+  console.log(`[InfinitePay] Pedido #${orderId} marcado como pago (R$ ${paidReais ?? '?'})`);
+  return res.status(200).json({ ok: true });
 });
 
 // ──────────────────────────────────────────────────────────────

@@ -14,6 +14,20 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-01] — Claude — Integração InfinitePay implementada
+- **What:** Integração InfinitePay Checkout via API REST (`POST https://api.checkout.infinitepay.io/links`).
+  - `CONFIG.infinitepay` com `handle` (env `INFINITEPAY_HANDLE`), `apiUrl`, `siteUrl` (env `SITE_URL`).
+  - `cardEnabled` agora é getter dinâmico: `true` quando `INFINITEPAY_HANDLE` estiver setado.
+  - `createInfinitePayLink(order, items)` → gera link com `redirect_url` + `webhook_url`.
+  - `POST /api/card-link` (autenticado) → retorna `{ url }` do checkout InfinitePay.
+  - `POST /api/webhooks/infinitepay` → recebe confirmação, marca pedido `status=paid`.
+  - Coluna `paid_amount numeric(10,2)` adicionada na tabela `orders` (Supabase).
+  - `public/confirmacao.html` atualizado: textos de cartão agora mencionam InfinitePay.
+- **Files:** `server.js`, `public/confirmacao.html`, `WORKLOG.md`.
+- **Next / open:** Isaque adiciona `INFINITEPAY_HANDLE` na Vercel (InfiniteTag sem `$`),
+  faz redeploy → botão de cartão ativa automaticamente. Testar fluxo ponta-a-ponta.
+  Também avaliar: login Google + checkout sem registro (guest).
+
 ## [2026-06-01] — Claude — DNS configurado + site no ar em cha.isana.ia.br
 - **What:** Todos os 5 registros DNS inseridos via API Cloudflare (token `Zone:DNS:Edit`
   na zona `isana.ia.br`): CNAME `brevo1._domainkey`, CNAME `brevo2._domainkey`,

@@ -172,23 +172,23 @@
               <h3 style="margin-bottom:8px;">Pagamento por cartão</h3>
               ${cfg.cardEnabled ? `
                 <p style="color:var(--text-muted);margin-bottom:20px;">
-                  Você será redirecionada para a página segura de pagamento.
-                  Aceitamos cartão de crédito em até 12x.
+                  Você será redirecionado para o checkout seguro da InfinitePay.
+                  Aceitamos cartão de crédito em até 12x e Pix — sem taxas extras para você!
                 </p>
                 <button
                   id="btn-pay-card"
                   class="btn btn-primary"
                   style="width:100%;margin-bottom:12px;"
                   onclick="payWithCard(${order.id})">
-                  Pagar R$ ${App.formatPrice(order.total).replace('R$ ', '')} com Cartão
+                  Pagar ${App.formatPrice(order.total)} com Cartão ou Pix
                 </button>
-                <p style="font-size:0.75rem;color:var(--text-muted);">Você será redirecionado para o ambiente seguro Pagar.me 🔒</p>
+                <p style="font-size:0.75rem;color:var(--text-muted);">Redirecionamento seguro via InfinitePay 🔒</p>
               ` : `
                 <p style="color:var(--text-muted);margin-bottom:20px;">
                   Estamos configurando o pagamento por cartão. Em breve essa opção estará disponível!
                 </p>
                 <p style="font-size:0.85rem;font-weight:700;margin-bottom:12px;">
-                  Enquanto isso, use PIX ou Transferência — é mais rápido e sem taxas para você! 🙏
+                  Enquanto isso, use PIX — é mais rápido e sem taxas para você! 🙏
                 </p>
               `}
             </div>
