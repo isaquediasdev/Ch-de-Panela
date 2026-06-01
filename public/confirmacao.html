@@ -92,38 +92,20 @@
           </div>
         </div>
 
-        <div class="pix-box" style="padding:24px;">
-          <h3 style="margin-bottom:8px;">Como você prefere enviar?</h3>
-          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:24px;">
-            Escolha a forma de pagamento mais fácil pra você 💝
+        <div class="pix-box" style="padding:24px;text-align:center;">
+          <div style="font-size:2.5rem;margin-bottom:12px;">💵</div>
+          <h3 style="margin-bottom:8px;">Pagar em dinheiro</h3>
+          <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:24px;">
+            Seu presente está reservado! É só trazer
+            <strong style="color:var(--gold-dark);">${App.formatPrice(order.total)}</strong>
+            em dinheiro no dia do chá e entregar aos noivos. 💝
           </p>
-
-          <!-- BOTÃO PRINCIPAL: InfinitePay (PIX / Débito / Crédito) -->
-          <button
-            id="btn-pay-card"
-            class="btn btn-primary"
-            style="width:100%;padding:16px;font-size:1rem;margin-bottom:12px;"
-            onclick="payWithCard(${order.id})">
-            💳 Pagar ${App.formatPrice(order.total)} — PIX / Débito / Crédito
-          </button>
-          <p style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-bottom:20px;">
-            Checkout seguro via InfinitePay · até 12x no crédito 🔒
-          </p>
-
-          <!-- DIVISOR -->
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-            <div style="flex:1;height:1px;background:var(--border);"></div>
-            <span style="font-size:0.78rem;color:var(--text-muted);">ou</span>
-            <div style="flex:1;height:1px;background:var(--border);"></div>
-          </div>
-
-          <!-- BOTÃO SECUNDÁRIO: Dinheiro -->
           <div id="panel-cash">
-            <button id="btn-cash" class="btn btn-outline" style="width:100%;padding:14px;" onclick="confirmCash(${order.id})">
-              💵 Vou pagar em dinheiro no dia do chá
+            <button id="btn-cash" class="btn btn-primary" style="width:100%;padding:14px;" onclick="confirmCash(${order.id})">
+              Confirmar — vou pagar no dia
             </button>
-            <p style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-top:8px;">
-              Seu presente fica reservado no seu nome 🎁
+            <p style="font-size:0.75rem;color:var(--text-muted);margin-top:10px;">
+              Os noivos serão avisados da sua escolha 🎁
             </p>
           </div>
         </div>
@@ -131,22 +113,6 @@
         <a href="/lista.html" class="btn btn-outline" style="margin-bottom:12px;">Ver Lista de Presentes</a>
       `;
 
-    }
-
-    async function payWithCard(orderId) {
-      const btn = document.getElementById('btn-pay-card');
-      if (btn) { btn.disabled = true; btn.textContent = 'Aguarde...'; }
-      const res = await App.apiFetch('/api/card-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
-      });
-      if (res.ok && res.data.url) {
-        window.location.href = res.data.url;
-      } else {
-        App.showToast(res.error || 'Não foi possível iniciar o pagamento.', 'error');
-        if (btn) { btn.disabled = false; btn.textContent = 'Tentar novamente'; }
-      }
     }
 
     async function confirmCash(orderId) {

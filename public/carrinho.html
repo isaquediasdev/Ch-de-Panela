@@ -101,12 +101,15 @@
             ${items.length} ${items.length === 1 ? 'presente' : 'presentes'} selecionado${items.length === 1 ? '' : 's'}
           </p>
           <button class="btn btn-primary btn-full" id="checkout-btn" onclick="checkout()">
-            Finalizar Pedido
+            💳 Pagar — PIX / Débito / Crédito
+          </button>
+          <button class="btn btn-outline btn-full" id="cash-btn" onclick="checkoutCash()" style="margin-top:10px;">
+            💵 Vou pagar em dinheiro no dia
           </button>
         </div>
 
         <p style="text-align:center;font-size:0.82rem;color:var(--text-muted);margin-top:12px;">
-          Após finalizar, você receberá a chave PIX para confirmar o presente.
+          Checkout seguro via InfinitePay 🔒
         </p>
       `;
     }
@@ -126,8 +129,28 @@
       }
     }
 
+    // Pagamento via InfinitePay (PIX / Débito / Crédito)
+    // O carrinho NÃO é limpo aqui — só quando o webhook confirmar o pagamento
     async function checkout() {
       const btn = document.getElementById('checkout-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = 'Gerando link...';
+
+      const res = await App.apiFetch('/api/card-link', { method: 'POST' });
+
+      if (res.ok && res.data.url) {
+        window.location.href = res.data.url;
+      } else {
+        App.showToast(res.error || 'Erro ao gerar link de pagamento', 'error');
+        btn.disabled = false;
+        btn.textContent = '💳 Pagar — PIX / Débito / Crédito';
+      }
+    }
+
+    // Pagamento em dinheiro — cria pedido diretamente e redireciona
+    async function checkoutCash() {
+      const btn = document.getElementById('cash-btn');
       if (!btn) return;
       btn.disabled = true;
       btn.textContent = 'Processando...';
@@ -135,13 +158,14 @@
       const res = await App.apiFetch('/api/orders', { method: 'POST' });
 
       if (res.ok) {
+        // Registrar como dinheiro
+        await App.apiFetch(`/api/orders/${res.data.orderId}/cash`, { method: 'POST' });
         App.updateCartCount();
         window.location.href = `/confirmacao.html?orderId=${res.data.orderId}`;
       } else {
         App.showToast(res.error || 'Erro ao finalizar pedido', 'error');
         btn.disabled = false;
-        btn.textContent = 'Finalizar Pedido';
-        // Reload cart in case something changed
+        btn.textContent = '💵 Vou pagar em dinheiro no dia';
         await loadCart();
       }
     }

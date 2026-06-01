@@ -259,3 +259,14 @@ here whenever you finish something, decide something, or find a bug.
   4. **Email** service decision for the OTP code (ZeptoMail/Resend/SMTP).
   Once unblocked: create schema migration → port API routes to `/api/*` → wire
   Supabase client + JWT auth → deploy to Vercel → point Cloudflare DNS.
+
+## [2026-06-01] — Claude — Carrinho intacto até pagamento confirmado
+- **What:** Novo fluxo de pagamento: `POST /api/card-link` agora NÃO cria pedido.
+  Cria uma `payment_session` (uuid, expires 30min) com os itens do carrinho. O link
+  InfinitePay usa `order_nsu = session.id`. Carrinho fica intacto. Webhook confirma →
+  aí sim: `place_order` RPC cria pedido + reserva itens + limpa carrinho + marca `paid`.
+  Tabela `payment_sessions` criada no Supabase. Fluxo dinheiro: botão separado no
+  carrinho → `POST /api/orders` → `confirmacao.html` (só para esse caso).
+  `confirmacao.html` simplificada para mostrar apenas o fluxo dinheiro.
+- **Files:** `server.js`, `public/carrinho.html`, `public/confirmacao.html`.
+- **Next / open:** Testar fluxo ponta-a-ponta (InfinitePay + webhook).

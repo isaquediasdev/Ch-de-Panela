@@ -425,54 +425,95 @@ async function createInfinitePayLink(order, items) {
 }
 
 // ── CARTÃO / INFINITEPAY — gerar link ────────────────────────
+// ── CARTÃO / INFINITEPAY — gerar link SEM criar pedido ───────
+// O carrinho fica intacto. O pedido só é criado quando o webhook
+// confirmar o pagamento. A sessão expira em 30 min se não pago.
 app.post('/api/card-link', requireAuth, async (req, res) => {
   if (!CONFIG.cardEnabled) return fail(res, 503, 'Pagamento por cartão ainda não configurado.');
-  const { orderId } = req.body;
-  if (!orderId) return fail(res, 400, 'orderId obrigatório');
-  const { data: order } = await supabase.from('orders')
-    .select('id, total, status').eq('id', orderId).eq('user_id', req.user.id).maybeSingle();
-  if (!order) return fail(res, 404, 'Pedido não encontrado');
-  if (order.status === 'paid') return fail(res, 409, 'Pedido já está pago');
 
-  const { data: ois } = await supabase.from('order_items').select('item_id, price').eq('order_id', order.id);
-  const items = (ois || []).map(oi => {
-    const it = ITEMS.find(i => i.id === oi.item_id);
-    return { id: oi.item_id, name: it ? it.name : `Presente #${oi.item_id}`, price: Number(oi.price) };
-  });
+  // Limpar sessões expiradas deste usuário (best-effort)
+  await supabase.from('payment_sessions')
+    .delete().eq('user_id', req.user.id).lt('expires_at', new Date().toISOString());
 
+  // Ler carrinho atual
+  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('user_id', req.user.id);
+  if (!cartRows || cartRows.length === 0) return fail(res, 400, 'Carrinho vazio');
+
+  const itemsData = cartRows.map(r => ITEMS.find(i => i.id === r.item_id)).filter(Boolean);
+  if (itemsData.length === 0) return fail(res, 400, 'Nenhum item válido no carrinho');
+
+  const total = itemsData.reduce((s, i) => s + i.price, 0);
+  const sessionItems = itemsData.map(i => ({ item_id: i.id, price: i.price }));
+
+  // Criar sessão de pagamento temporária (30 min)
+  const { data: session, error: sessErr } = await supabase.from('payment_sessions')
+    .insert({ user_id: req.user.id, items: sessionItems, total })
+    .select('id').single();
+  if (sessErr || !session) return fail(res, 500, 'Erro ao criar sessão de pagamento');
+
+  // Gerar link InfinitePay com order_nsu = session.id
   try {
-    const link = await createInfinitePayLink(order, items);
-    // Registrar método de pagamento
-    await supabase.from('orders').update({ payment_method: 'cartao_infinitepay' }).eq('id', order.id);
+    const fakeOrder = { id: session.id, total };
+    const link = await createInfinitePayLink(fakeOrder, itemsData);
     return ok(res, { url: link.url || link.checkout_url || link.link });
   } catch (e) {
+    // Limpar sessão se falhar
+    await supabase.from('payment_sessions').delete().eq('id', session.id);
     console.error('[InfinitePay]', e.message);
-    return fail(res, 502, 'Não foi possível gerar o link de pagamento. Tente PIX ou contate os noivos.');
+    return fail(res, 502, 'Não foi possível gerar o link de pagamento. Tente outro método ou contate os noivos.');
   }
 });
 
-// ── WEBHOOK INFINITEPAY — confirmar pagamento ────────────────
+// ── WEBHOOK INFINITEPAY — confirmar pagamento e criar pedido ──
 // InfinitePay envia POST com { order_nsu, paid_amount, ... }
+// order_nsu = payment_session.id (uuid)
 // Responder 200 = sucesso; 400 = retry.
 app.post('/api/webhooks/infinitepay', express.json(), async (req, res) => {
   const { order_nsu, paid_amount, capture_method } = req.body || {};
-  const orderId = parseInt(order_nsu, 10);
-  if (!orderId) return res.status(400).json({ error: 'order_nsu ausente' });
+  if (!order_nsu) return res.status(400).json({ error: 'order_nsu ausente' });
 
-  const { data: order } = await supabase.from('orders').select('id, total, status').eq('id', orderId).maybeSingle();
-  if (!order) return res.status(400).json({ error: 'Pedido não encontrado' });
-  if (order.status === 'paid') return res.status(200).json({ ok: true, already: true });
+  // Buscar sessão de pagamento
+  const { data: session } = await supabase.from('payment_sessions')
+    .select('*').eq('id', order_nsu).maybeSingle();
 
-  // paid_amount vem em centavos
-  const paidReais = paid_amount ? paid_amount / 100 : null;
+  if (!session) return res.status(400).json({ error: 'Sessão não encontrada ou expirada' });
+  if (session.used) return res.status(200).json({ ok: true, already: true });
+  if (new Date(session.expires_at) < new Date()) {
+    return res.status(400).json({ error: 'Sessão expirada' });
+  }
+
+  // Criar pedido e reservar itens via RPC atômica
+  const pItems = session.items; // [{item_id, price}]
+  const { data: orderId, error: orderErr } = await supabase.rpc('place_order', {
+    p_user_id: session.user_id, p_items: pItems,
+  });
+
+  if (orderErr) {
+    console.error('[InfinitePay webhook] place_order:', orderErr.message);
+    // Se for conflito de item já reservado, retornar 200 pra evitar retry infinito
+    if ((orderErr.message || '').includes('CONFLICT')) {
+      await supabase.from('payment_sessions').update({ used: true }).eq('id', session.id);
+      return res.status(200).json({ ok: false, reason: 'items_already_reserved' });
+    }
+    return res.status(400).json({ error: 'Erro ao criar pedido' });
+  }
+
+  // Marcar pedido como pago
+  const paidReais = paid_amount ? paid_amount / 100 : session.total;
   await supabase.from('orders').update({
     status: 'paid',
-    payment_method: capture_method || 'cartao_infinitepay',
-    ...(paidReais !== null ? { paid_amount: paidReais } : {}),
+    payment_method: capture_method || 'infinitepay',
+    paid_amount: paidReais,
   }).eq('id', orderId);
 
-  console.log(`[InfinitePay] Pedido #${orderId} marcado como pago (R$ ${paidReais ?? '?'})`);
-  return res.status(200).json({ ok: true });
+  // Limpar carrinho do usuário
+  await supabase.from('cart_items').delete().eq('user_id', session.user_id);
+
+  // Marcar sessão como usada
+  await supabase.from('payment_sessions').update({ used: true }).eq('id', session.id);
+
+  console.log(`[InfinitePay] Pedido #${orderId} criado e pago (R$ ${paidReais}) — sessão ${session.id}`);
+  return res.status(200).json({ ok: true, orderId });
 });
 
 // ──────────────────────────────────────────────────────────────
