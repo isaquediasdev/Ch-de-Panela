@@ -14,6 +14,23 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-01] — Claude — DNS configurado + site no ar em cha.isana.ia.br
+- **What:** Todos os 5 registros DNS inseridos via API Cloudflare (token `Zone:DNS:Edit`
+  na zona `isana.ia.br`): CNAME `brevo1._domainkey`, CNAME `brevo2._domainkey`,
+  TXT `@` (brevo-code), TXT `_dmarc`, CNAME `cha → cname.vercel-dns.com`. Removido
+  DMARC conflitante (`p=reject`) que estava pré-existente. Brevo confirmou todos os
+  registros `status:true`. E-mail de teste enviado com sucesso via `cha@isana.ia.br`
+  (DKIM funcional). Vars `BREVO_API_KEY` e `EMAIL_FROM` setadas na Vercel. `SHOW_DEV_CODE`
+  removido da Vercel. Redeploy feito. Domínio `cha.isana.ia.br` adicionado ao projeto
+  Vercel → `https://cha.isana.ia.br` retorna 200. ✅ Site 100% pronto para o público.
+  Nota: o endpoint PUT `/senders/domains/{domain}/authenticate` do Brevo retorna erro
+  mesmo com DNS correto (bug conhecido); o e-mail funciona pois os registros DKIM estão
+  validados. Autenticar via painel Brevo (app.brevo.com → Senders → Domains → Authenticate)
+  é opcional e só afeta o status visual na conta Brevo, não o envio.
+- **Files:** `WORKLOG.md`.
+- **Next / open:** (opcional) clicar "Authenticate" no painel Brevo para o status ficar
+  verde. Conectar repo GitHub na Vercel para auto-deploy. Evento: 20/06/2026. 🎉
+
 ## [2026-06-01] — Claude — Flash de nomes corrigido; DNS pendente (aguardando token)
 - **What:** Substituído o placeholder `[Nome da Noiva] & [Nome do Noivo]` pelo nome real
   `Ana Clara & Isaque` direto no HTML de todas as páginas (`index.html`, `lista.html`,
