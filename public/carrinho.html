@@ -101,24 +101,8 @@
             ${items.length} ${items.length === 1 ? 'presente' : 'presentes'} selecionado${items.length === 1 ? '' : 's'}
           </p>
 
-          <!-- QR code PIX inline (AbacatePay) — aparece ao clicar -->
-          <div id="pix-panel" style="display:none;margin-bottom:16px;">
-            <div style="text-align:center;padding:20px;background:#fffbf4;border-radius:12px;border:1px dashed var(--gold);">
-              <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Pix — Escaneie ou copie</p>
-              <div id="pix-qr-img" style="margin-bottom:12px;"></div>
-              <div style="display:flex;align-items:center;gap:8px;background:#f5f0e8;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
-                <span id="pix-brcode" style="flex:1;font-size:0.72rem;word-break:break-all;color:var(--text);text-align:left;"></span>
-                <button onclick="copyBrCode()" style="flex-shrink:0;padding:6px 12px;font-size:0.8rem;background:var(--gold);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-family:inherit;">Copiar</button>
-              </div>
-              <p id="pix-expires" style="font-size:0.75rem;color:var(--text-muted);">Válido por 30 minutos · Aguardando pagamento…</p>
-            </div>
-          </div>
-
-          <button class="btn btn-primary btn-full" id="pix-btn" onclick="checkoutPix()">
-            📱 Pagar com PIX
-          </button>
-          <button class="btn btn-outline btn-full" id="checkout-btn" onclick="checkout()" style="margin-top:10px;">
-            💳 Cartão / Débito — via InfinitePay
+          <button class="btn btn-primary btn-full" id="checkout-btn" onclick="checkout()">
+            💳 Pagar com Cartão, Débito ou PIX
           </button>
           <button class="btn btn-outline btn-full" id="cash-btn" onclick="checkoutCash()" style="margin-top:10px;">
             💵 Vou pagar em dinheiro no dia
@@ -126,7 +110,7 @@
         </div>
 
         <p style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:12px;">
-          PIX via AbacatePay · Cartão via InfinitePay 🔒
+          Pagamento seguro via InfinitePay 🔒
         </p>
       `;
     }
@@ -146,69 +130,7 @@
       }
     }
 
-    // PIX dinâmico via AbacatePay — QR code inline, sem sair do site
-    async function checkoutPix() {
-      const btn = document.getElementById('pix-btn');
-      const panel = document.getElementById('pix-panel');
-      if (!btn) return;
-
-      // Se já está aberto, fechar
-      if (panel && panel.style.display !== 'none') {
-        panel.style.display = 'none';
-        btn.textContent = '📱 Pagar com PIX';
-        return;
-      }
-
-      btn.disabled = true;
-      btn.textContent = 'Gerando QR Code…';
-
-      const res = await App.apiFetch('/api/pix-charge', { method: 'POST' });
-
-      if (res.ok) {
-        const { brCode, brCodeBase64, expiresAt } = res.data;
-        document.getElementById('pix-qr-img').innerHTML =
-          `<img src="${brCodeBase64}" style="width:200px;height:200px;border-radius:10px;" alt="QR Code PIX">`;
-        document.getElementById('pix-brcode').textContent = brCode;
-        window._pixBrCode = brCode;
-        if (expiresAt) {
-          const exp = new Date(expiresAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          document.getElementById('pix-expires').textContent = `Válido até ${exp} · Aguardando pagamento…`;
-        }
-        if (panel) panel.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = '✕ Fechar PIX';
-
-        // Polling: verificar a cada 5s se o pagamento foi confirmado
-        pollPixPayment(res.data.sessionId);
-      } else {
-        App.showToast(res.error || 'Erro ao gerar QR Code PIX', 'error');
-        btn.disabled = false;
-        btn.textContent = '📱 Pagar com PIX';
-      }
-    }
-
-    function copyBrCode() {
-      navigator.clipboard.writeText(window._pixBrCode || '')
-        .then(() => App.showToast('Código PIX copiado!', 'success'));
-    }
-
-    // Verifica a cada 5s se o pagamento foi confirmado (webhook recebido)
-    async function pollPixPayment(sessionId) {
-      if (!sessionId) return;
-      const interval = setInterval(async () => {
-        const res = await App.apiFetch(`/api/pix-status?sessionId=${sessionId}`);
-        if (res.ok && res.data.paid) {
-          clearInterval(interval);
-          App.showToast('🎉 Pagamento PIX confirmado! Obrigado!', 'success');
-          App.updateCartCount();
-          setTimeout(() => { window.location.href = '/lista.html'; }, 2000);
-        }
-      }, 5000);
-      // Parar após 30 min
-      setTimeout(() => clearInterval(interval), 30 * 60 * 1000);
-    }
-
-    // Pagamento via InfinitePay (Cartão / Débito)
+    // Pagamento via InfinitePay (Cartão / Débito / PIX)
     // O carrinho NÃO é limpo aqui — só quando o webhook confirmar o pagamento
     async function checkout() {
       const btn = document.getElementById('checkout-btn');
