@@ -40,7 +40,8 @@
     async function loadConfirmation() {
       const page = document.getElementById('confirm-page');
       const params = new URLSearchParams(window.location.search);
-      const orderId = parseInt(params.get('orderId'), 10);
+      const orderIdRaw = params.get('orderId');
+      const orderId = parseInt(orderIdRaw, 10); // UUID da InfinitePay vira NaN → fallback pro mais recente
 
       const [ordersRes, configRes] = await Promise.all([
         App.apiFetch('/api/orders/me'),
@@ -50,7 +51,8 @@
       if (!ordersRes.ok) { window.location.href = '/login.html'; return; }
 
       const orders = ordersRes.data;
-      const order = orderId ? orders.find(o => o.id === orderId) : orders[0];
+      // orderId pode ser UUID (InfinitePay) — parseInt retorna NaN → pega o mais recente
+      const order = (orderId && !isNaN(orderId) ? orders.find(o => o.id === orderId) : null) || orders[0];
 
       if (!order) {
         page.innerHTML = `
