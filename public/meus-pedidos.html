@@ -123,10 +123,24 @@
               <span>${statusBadge}${pay ? `<span style="font-size:0.82rem;color:var(--text-muted);margin-left:8px;">${pay}</span>` : ''}</span>
               <strong style="color:var(--gold-dark);font-size:1.1rem;">${App.formatPrice(order.total)}</strong>
             </div>
-            ${isPaid ? '' : `<a href="/confirmacao.html?orderId=${order.id}" class="btn btn-primary btn-full" style="margin-top:14px;">Finalizar pagamento</a>`}
+            ${isPaid ? '' : `
+              <a href="/confirmacao.html?orderId=${order.id}" class="btn btn-primary btn-full" style="margin-top:14px;">Finalizar pagamento</a>
+              <button onclick="cancelOrder(${order.id})" class="btn btn-danger btn-full" style="margin-top:8px;">Cancelar reserva</button>
+            `}
           </div>
         `;
       }).join('');
+    }
+
+    async function cancelOrder(orderId) {
+      if (!confirm('Tem certeza que quer cancelar essa reserva? O item voltará para a lista.')) return;
+      const res = await App.apiFetch(`/api/orders/${orderId}`, { method: 'DELETE' });
+      if (res.ok) {
+        App.showToast('Reserva cancelada. O item voltou para a lista.', 'info');
+        await loadOrders();
+      } else {
+        App.showToast(res.error || 'Erro ao cancelar pedido', 'error');
+      }
     }
 
     document.addEventListener('DOMContentLoaded', async () => {

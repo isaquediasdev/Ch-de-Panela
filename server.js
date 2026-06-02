@@ -343,6 +343,16 @@ app.get('/api/orders/me', requireAuth, async (req, res) => {
   return ok(res, result);
 });
 
+// Cancelar pedido pendente (libera reserva via CASCADE)
+app.delete('/api/orders/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { data: order } = await supabase.from('orders').select('id, status').eq('id', id).eq('user_id', req.user.id).maybeSingle();
+  if (!order) return fail(res, 404, 'Pedido não encontrado');
+  if (order.status === 'paid') return fail(res, 400, 'Não é possível cancelar um pedido já pago');
+  await supabase.from('orders').delete().eq('id', id);
+  return ok(res, { cancelled: true });
+});
+
 app.post('/api/orders/:id/cash', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { data: order } = await supabase.from('orders').select('id').eq('id', id).eq('user_id', req.user.id).maybeSingle();
