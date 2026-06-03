@@ -891,10 +891,14 @@ footer a { color: var(--gold-light); }
 }
 
 @media (max-width: 640px) {
-  /* NAV — esconde link de texto no mobile, mantém carrinho */
-  .nav-inner { padding: 0 16px; gap: 10px; }
-  .nav-link-text { display: none; }
-  .nav-logo { font-size: 1rem; }
+  /* NAV — no mobile: logo | carrinho | sair */
+  .nav-inner { padding: 0 14px; gap: 8px; }
+  .nav-link-text { display: none; }           /* "Lista de Presentes" some */
+  .nav-user-desktop { display: none !important; } /* "Olá Ana" e "Meus Pedidos" somem */
+  .nav-logo { font-size: 0.95rem; }
+  .nav-links { gap: 8px; }
+  .nav-cart { padding: 5px 12px; font-size: 0.78rem; }
+  #logout-btn { padding: 6px 12px; font-size: 0.78rem; }
 
   /* HERO */
   .hero { padding: 48px 16px 36px; }
