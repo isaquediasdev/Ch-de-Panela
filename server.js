@@ -271,9 +271,7 @@ app.put('/api/auth/me', requireAuth, async (req, res) => {
   if (error) return fail(res, 500, 'Erro ao atualizar dados');
 
   // Atualiza o cookie JWT com os novos dados
-  const { signJwt } = require('./lib/auth');
-  const token = await signJwt({ id: req.user.id, name: name.trim(), email: emailLower });
-  res.setHeader('Set-Cookie', `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`);
+  await issueSession(res, { id: req.user.id, name: name.trim(), email: emailLower });
 
   return ok(res, { name: name.trim(), email: emailLower });
 });
