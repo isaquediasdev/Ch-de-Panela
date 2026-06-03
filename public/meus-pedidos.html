@@ -47,10 +47,31 @@
 
     <!-- Dados do usuário -->
     <div id="user-info" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:28px;display:none;">
-      <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);font-weight:700;margin-bottom:12px;">Seus dados</p>
-      <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);font-weight:700;margin:0;">Seus dados</p>
+        <button onclick="toggleEdit()" id="edit-btn" style="background:none;border:none;color:var(--gold-dark);font-size:0.85rem;cursor:pointer;font-family:inherit;font-weight:700;padding:4px 8px;">✏️ Editar</button>
+      </div>
+
+      <!-- Modo visualização -->
+      <div id="user-view" style="display:flex;flex-direction:column;gap:6px;">
         <div style="font-size:0.95rem;"><strong id="user-name"></strong></div>
         <div style="font-size:0.88rem;color:var(--text-muted);" id="user-email"></div>
+      </div>
+
+      <!-- Modo edição -->
+      <div id="user-edit" style="display:none;">
+        <div class="form-group" style="margin-bottom:12px;">
+          <label for="edit-name" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700;display:block;margin-bottom:6px;">Nome</label>
+          <input type="text" id="edit-name" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.95rem;" />
+        </div>
+        <div class="form-group" style="margin-bottom:16px;">
+          <label for="edit-email" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700;display:block;margin-bottom:6px;">E-mail</label>
+          <input type="email" id="edit-email" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:0.95rem;" />
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button onclick="saveUser()" id="save-btn" class="btn btn-primary" style="flex:1;padding:10px;">Salvar</button>
+          <button onclick="toggleEdit()" class="btn btn-outline" style="flex:1;padding:10px;">Cancelar</button>
+        </div>
       </div>
     </div>
 
@@ -145,6 +166,43 @@
           </div>
         `;
       }).join('');
+    }
+
+    function toggleEdit() {
+      const view = document.getElementById('user-view');
+      const edit = document.getElementById('user-edit');
+      const btn  = document.getElementById('edit-btn');
+      const isEditing = edit.style.display !== 'none';
+      if (isEditing) {
+        view.style.display = 'flex';
+        edit.style.display = 'none';
+        btn.textContent = '✏️ Editar';
+      } else {
+        document.getElementById('edit-name').value = document.getElementById('user-name').textContent;
+        document.getElementById('edit-email').value = document.getElementById('user-email').textContent;
+        view.style.display = 'none';
+        edit.style.display = 'block';
+        btn.textContent = '✕ Fechar';
+        document.getElementById('edit-name').focus();
+      }
+    }
+
+    async function saveUser() {
+      const btn  = document.getElementById('save-btn');
+      const name  = document.getElementById('edit-name').value.trim();
+      const email = document.getElementById('edit-email').value.trim();
+      if (!name || !email) { App.showToast('Preencha nome e e-mail', 'error'); return; }
+      btn.disabled = true; btn.textContent = 'Salvando…';
+      const res = await App.apiFetch('/api/auth/me', { method: 'PUT', body: JSON.stringify({ name, email }) });
+      if (res.ok) {
+        document.getElementById('user-name').textContent = name;
+        document.getElementById('user-email').textContent = email;
+        App.showToast('Dados atualizados!', 'success');
+        toggleEdit();
+      } else {
+        App.showToast(res.error || 'Erro ao salvar', 'error');
+      }
+      btn.disabled = false; btn.textContent = 'Salvar';
     }
 
     async function cancelOrder(orderId) {

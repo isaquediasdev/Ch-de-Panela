@@ -255,6 +255,29 @@ app.get('/api/auth/me', async (req, res) => {
   return ok(res, { id: s.id, name: s.name, email: s.email });
 });
 
+app.put('/api/auth/me', requireAuth, async (req, res) => {
+  const { name, email } = req.body || {};
+  if (!name || !email) return fail(res, 400, 'Nome e e-mail são obrigatórios');
+  const emailLower = email.trim().toLowerCase();
+
+  // Verifica se e-mail já está em uso por outro usuário
+  const { data: existing } = await supabase.from('users')
+    .select('id').eq('email', emailLower).neq('id', req.user.id).maybeSingle();
+  if (existing) return fail(res, 409, 'Este e-mail já está em uso por outra conta');
+
+  const { error } = await supabase.from('users')
+    .update({ name: name.trim(), email: emailLower })
+    .eq('id', req.user.id);
+  if (error) return fail(res, 500, 'Erro ao atualizar dados');
+
+  // Atualiza o cookie JWT com os novos dados
+  const { signJwt } = require('./lib/auth');
+  const token = await signJwt({ id: req.user.id, name: name.trim(), email: emailLower });
+  res.setHeader('Set-Cookie', `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`);
+
+  return ok(res, { name: name.trim(), email: emailLower });
+});
+
 // ── PUBLIC ────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => ok(res, {
   nomes: CONFIG.nomes, dataEvento: CONFIG.dataEvento, horaEvento: CONFIG.horaEvento,
