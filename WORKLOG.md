@@ -14,6 +14,21 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-05] — Claude — Refactor user_id→pessoa_id p/ cutover isana-core (branch, NÃO deployado)
+- **What:** refatorado `server.js` para o cutover unificado do isana-core. Todas as refs de coluna
+  `user_id`→`pessoa_id` (cart_items/orders/payment_sessions, inclusive `session.user_id` e `o.user_id`);
+  as 3 chamadas `rpc('place_order', { p_user_id })`→`{ p_pessoa_id }`; embed do admin
+  `users(name,email,phone)`→`pessoas(nome,email,phone)` com map `nome→name`. As 6 queries `from('users')`
+  foram MANTIDAS (passam a operar sobre a VIEW de compat criada pelo cutover). 23 linhas, `node --check` OK.
+- **Por quê / como casa:** este refactor SÓ funciona junto do `isana-core/db/STAGED_cutover.sql`
+  (renomeia colunas, dropa a tabela `users` e cria VIEW+triggers + `place_order(p_pessoa_id)`). DEVE subir
+  no MESMO deploy do cutover. `req.user.id` passa a ser `pessoa.id` via a VIEW (OTP insert/select retornam pessoa.id).
+- **Files:** `server.js` (branch `cutover/pessoa-id` — NÃO mergeado em `main`, que faz auto-deploy).
+- **Next / open:** revisão adversarial do par (rodando); validar em branch Supabase ou cutover live
+  (orders=0 → baixo risco) com snapshot + modo manutenção; só então merge→main (deploy) coordenado com o SQL.
+
+---
+
 ## [2026-06-01] — Claude — CTA de carrinho + pagamento unificado
 - **What:** (1) Modal CTA ao adicionar item ao carrinho (`showCartCTA` em `app.js` +
   `.cart-cta-*` em `style.css`): sheet bottom-up com "Finalizar compra →" e

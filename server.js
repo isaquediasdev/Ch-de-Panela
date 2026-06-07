@@ -303,7 +303,7 @@ app.get('/api/items/:id', async (req, res) => {
 
 // ── CART ──────────────────────────────────────────────────────
 app.get('/api/cart', requireAuth, async (req, res) => {
-  const { data: rows } = await supabase.from('cart_items').select('item_id').eq('user_id', req.user.id);
+  const { data: rows } = await supabase.from('cart_items').select('item_id').eq('pessoa_id', req.user.id);
   const map = await getReservedMap();
   const items = (rows || []).map(r => { const it = ITEMS.find(i => i.id === r.item_id); return it ? enrichItem(it, map) : null; }).filter(Boolean);
   return ok(res, items);
@@ -316,7 +316,7 @@ app.post('/api/cart', requireAuth, async (req, res) => {
   if (!item) return fail(res, 404, 'Item não encontrado');
   const { data: reserved } = await supabase.from('reserved_items').select('item_id').eq('item_id', itemId).maybeSingle();
   if (reserved) return fail(res, 409, 'Este presente já foi reservado por outra pessoa');
-  const { error } = await supabase.from('cart_items').insert({ user_id: req.user.id, item_id: itemId });
+  const { error } = await supabase.from('cart_items').insert({ pessoa_id: req.user.id, item_id: itemId });
   if (error) {
     if (error.code === '23505') return fail(res, 409, 'Item já está no carrinho');
     return fail(res, 500, 'Erro ao adicionar ao carrinho');
@@ -326,18 +326,18 @@ app.post('/api/cart', requireAuth, async (req, res) => {
 
 app.delete('/api/cart/:itemId', requireAuth, async (req, res) => {
   const itemId = parseInt(req.params.itemId, 10);
-  await supabase.from('cart_items').delete().eq('user_id', req.user.id).eq('item_id', itemId);
+  await supabase.from('cart_items').delete().eq('pessoa_id', req.user.id).eq('item_id', itemId);
   return ok(res, null);
 });
 
 // ── ORDERS ────────────────────────────────────────────────────
 app.post('/api/orders', requireAuth, async (req, res) => {
-  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('user_id', req.user.id);
+  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('pessoa_id', req.user.id);
   if (!cartRows || cartRows.length === 0) return fail(res, 400, 'Carrinho vazio');
   const itemsData = cartRows.map(r => ITEMS.find(i => i.id === r.item_id)).filter(Boolean);
   const pItems = itemsData.map(i => ({ item_id: i.id, price: i.price }));
 
-  const { data: orderId, error } = await supabase.rpc('place_order', { p_user_id: req.user.id, p_items: pItems });
+  const { data: orderId, error } = await supabase.rpc('place_order', { p_pessoa_id: req.user.id, p_items: pItems });
   if (error) {
     if ((error.message || '').includes('CONFLICT')) {
       const ids = ((error.message.split('CONFLICT:')[1] || '').match(/\d+/g) || []).map(Number);
@@ -354,7 +354,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
 });
 
 app.get('/api/orders/me', requireAuth, async (req, res) => {
-  const { data: orders } = await supabase.from('orders').select('*').eq('user_id', req.user.id).order('created_at', { ascending: false });
+  const { data: orders } = await supabase.from('orders').select('*').eq('pessoa_id', req.user.id).order('created_at', { ascending: false });
   const result = [];
   for (const o of (orders || [])) {
     const { data: ois } = await supabase.from('order_items').select('item_id, price').eq('order_id', o.id);
@@ -367,7 +367,7 @@ app.get('/api/orders/me', requireAuth, async (req, res) => {
 // Cancelar pedido pendente (libera reserva via CASCADE)
 app.delete('/api/orders/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { data: order } = await supabase.from('orders').select('id, status').eq('id', id).eq('user_id', req.user.id).maybeSingle();
+  const { data: order } = await supabase.from('orders').select('id, status').eq('id', id).eq('pessoa_id', req.user.id).maybeSingle();
   if (!order) return fail(res, 404, 'Pedido não encontrado');
   if (order.status === 'paid') return fail(res, 400, 'Não é possível cancelar um pedido já pago');
   await supabase.from('orders').delete().eq('id', id);
@@ -376,7 +376,7 @@ app.delete('/api/orders/:id', requireAuth, async (req, res) => {
 
 app.post('/api/orders/:id/cash', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { data: order } = await supabase.from('orders').select('id').eq('id', id).eq('user_id', req.user.id).maybeSingle();
+  const { data: order } = await supabase.from('orders').select('id').eq('id', id).eq('pessoa_id', req.user.id).maybeSingle();
   if (!order) return fail(res, 404, 'Pedido não encontrado');
   await supabase.from('orders').update({ payment_method: 'dinheiro' }).eq('id', id);
   return ok(res, { orderId: id, paymentMethod: 'dinheiro' });
@@ -386,7 +386,7 @@ app.post('/api/orders/:id/cash', requireAuth, async (req, res) => {
 app.get('/api/pix-qr', requireAuth, async (req, res) => {
   const orderId = parseInt(req.query.orderId, 10);
   if (!orderId) return fail(res, 400, 'orderId obrigatório');
-  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).eq('user_id', req.user.id).maybeSingle();
+  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).eq('pessoa_id', req.user.id).maybeSingle();
   if (!order) return fail(res, 404, 'Pedido não encontrado');
   if (!CONFIG.pixKey) return fail(res, 503, 'Chave PIX não configurada. Entre em contato com os noivos.');
   try {
@@ -405,20 +405,20 @@ app.get('/api/pix-qr', requireAuth, async (req, res) => {
 // ── ADMIN ─────────────────────────────────────────────────────
 app.get('/api/admin/orders', requireAdmin, async (req, res) => {
   const { data: orders } = await supabase.from('orders')
-    .select('*, users(name, email, phone)').order('created_at', { ascending: false });
+    .select('*, pessoas(nome, email, phone)').order('created_at', { ascending: false });
   const enriched = [];
   for (const o of (orders || [])) {
     const { data: ois } = await supabase.from('order_items').select('item_id, price').eq('order_id', o.id);
     const items = (ois || []).map(oi => { const it = ITEMS.find(i => i.id === oi.item_id); return it ? { ...it, price: Number(oi.price) } : { id: oi.item_id, price: Number(oi.price), name: 'Item removido' }; });
     enriched.push({
       ...o, total: Number(o.total),
-      user_name: o.users && o.users.name, user_email: o.users && o.users.email, user_phone: o.users && o.users.phone,
+      user_name: o.pessoas && o.pessoas.nome, user_email: o.pessoas && o.pessoas.email, user_phone: o.pessoas && o.pessoas.phone,
       items,
     });
   }
   const totalPaid = enriched.filter(o => o.status === 'paid').reduce((s, o) => s + o.total, 0);
   const totalPending = enriched.filter(o => o.status === 'pending').reduce((s, o) => s + o.total, 0);
-  const guests = new Set(enriched.map(o => o.user_id)).size;
+  const guests = new Set(enriched.map(o => o.pessoa_id)).size;
   return ok(res, { orders: enriched, summary: { totalPaid, totalPending, guests } });
 });
 
@@ -470,9 +470,9 @@ app.post('/api/pix-charge', requireAuth, async (req, res) => {
 
   // Limpar sessões expiradas do usuário
   await supabase.from('payment_sessions')
-    .delete().eq('user_id', req.user.id).lt('expires_at', new Date().toISOString());
+    .delete().eq('pessoa_id', req.user.id).lt('expires_at', new Date().toISOString());
 
-  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('user_id', req.user.id);
+  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('pessoa_id', req.user.id);
   if (!cartRows || cartRows.length === 0) return fail(res, 400, 'Carrinho vazio');
 
   const itemsData = cartRows.map(r => ITEMS.find(i => i.id === r.item_id)).filter(Boolean);
@@ -483,7 +483,7 @@ app.post('/api/pix-charge', requireAuth, async (req, res) => {
 
   // Criar sessão temporária
   const { data: session, error: sessErr } = await supabase.from('payment_sessions')
-    .insert({ user_id: req.user.id, items: sessionItems, total })
+    .insert({ pessoa_id: req.user.id, items: sessionItems, total })
     .select('id').single();
   if (sessErr || !session) return fail(res, 500, 'Erro ao criar sessão');
 
@@ -521,7 +521,7 @@ app.get('/api/pix-status', requireAuth, async (req, res) => {
   const { sessionId } = req.query;
   if (!sessionId) return fail(res, 400, 'sessionId obrigatório');
   const { data: session } = await supabase.from('payment_sessions')
-    .select('used, user_id').eq('id', sessionId).eq('user_id', req.user.id).maybeSingle();
+    .select('used, pessoa_id').eq('id', sessionId).eq('pessoa_id', req.user.id).maybeSingle();
   if (!session) return fail(res, 404, 'Sessão não encontrada');
   return ok(res, { paid: session.used === true });
 });
@@ -550,7 +550,7 @@ app.post('/api/webhooks/abacatepay', express.json(), async (req, res) => {
 
   // Criar pedido e reservar itens
   const { data: orderId, error: orderErr } = await supabase.rpc('place_order', {
-    p_user_id: session.user_id, p_items: session.items,
+    p_pessoa_id: session.pessoa_id, p_items: session.items,
   });
 
   if (orderErr) {
@@ -571,7 +571,7 @@ app.post('/api/webhooks/abacatepay', express.json(), async (req, res) => {
   }).eq('id', orderId);
 
   // Limpar carrinho e sessão
-  await supabase.from('cart_items').delete().eq('user_id', session.user_id);
+  await supabase.from('cart_items').delete().eq('pessoa_id', session.pessoa_id);
   await supabase.from('payment_sessions').update({ used: true }).eq('id', session.id);
 
   console.log(`[AbacatePay] Pedido #${orderId} pago via PIX (R$ ${paidAmount})`);
@@ -615,10 +615,10 @@ app.post('/api/card-link', requireAuth, async (req, res) => {
 
   // Limpar sessões expiradas deste usuário (best-effort)
   await supabase.from('payment_sessions')
-    .delete().eq('user_id', req.user.id).lt('expires_at', new Date().toISOString());
+    .delete().eq('pessoa_id', req.user.id).lt('expires_at', new Date().toISOString());
 
   // Ler carrinho atual
-  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('user_id', req.user.id);
+  const { data: cartRows } = await supabase.from('cart_items').select('item_id').eq('pessoa_id', req.user.id);
   if (!cartRows || cartRows.length === 0) return fail(res, 400, 'Carrinho vazio');
 
   const itemsData = cartRows.map(r => ITEMS.find(i => i.id === r.item_id)).filter(Boolean);
@@ -629,7 +629,7 @@ app.post('/api/card-link', requireAuth, async (req, res) => {
 
   // Criar sessão de pagamento temporária (30 min)
   const { data: session, error: sessErr } = await supabase.from('payment_sessions')
-    .insert({ user_id: req.user.id, items: sessionItems, total })
+    .insert({ pessoa_id: req.user.id, items: sessionItems, total })
     .select('id').single();
   if (sessErr || !session) return fail(res, 500, 'Erro ao criar sessão de pagamento');
 
@@ -667,7 +667,7 @@ app.post('/api/webhooks/infinitepay', express.json(), async (req, res) => {
   // Criar pedido e reservar itens via RPC atômica
   const pItems = session.items; // [{item_id, price}]
   const { data: orderId, error: orderErr } = await supabase.rpc('place_order', {
-    p_user_id: session.user_id, p_items: pItems,
+    p_pessoa_id: session.pessoa_id, p_items: pItems,
   });
 
   if (orderErr) {
@@ -689,7 +689,7 @@ app.post('/api/webhooks/infinitepay', express.json(), async (req, res) => {
   }).eq('id', orderId);
 
   // Limpar carrinho do usuário
-  await supabase.from('cart_items').delete().eq('user_id', session.user_id);
+  await supabase.from('cart_items').delete().eq('pessoa_id', session.pessoa_id);
 
   // Marcar sessão como usada
   await supabase.from('payment_sessions').update({ used: true }).eq('id', session.id);
