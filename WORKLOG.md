@@ -14,6 +14,18 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-07] — Claude — CUTOVER APLICADO + DEPLOYADO (unificação isana-core concluída no lado chá)
+- **What:** o refactor da entrada anterior foi para produção. Apliquei `isana-core/db/STAGED_cutover.sql` no banco vivo
+  (`users`→VIEW sobre `pessoas`, colunas `user_id`→`pessoa_id`, `place_order(p_pessoa_id)`), com dry-run ROLLBACK validando
+  antes (schema+dados reais) + snapshot. Mergeei `cutover/pessoa-id`→`main` e deployei na Vercel (prod READY).
+- **Validação ao vivo:** `/api/items` 200/77; embed `orders→pessoas` resolve (200); login email inexistente 404.
+  Advisor: revogado EXECUTE de anon/authenticated nas funções de trigger da VIEW.
+- **Files:** `server.js` (já na entrada anterior), banco (cutover). Branch `cutover/pessoa-id` deletada (mergeada).
+- **Next / open:** o app agora depende da VIEW `users` + `place_order(p_pessoa_id)`. NÃO recriar tabela `users`.
+  Pós-cutover há 0 pedidos; testar um fluxo de compra real (OTP→carrinho→PIX) quando o chá voltar a vender.
+
+---
+
 ## [2026-06-05] — Claude — Refactor user_id→pessoa_id p/ cutover isana-core (branch, NÃO deployado)
 - **What:** refatorado `server.js` para o cutover unificado do isana-core. Todas as refs de coluna
   `user_id`→`pessoa_id` (cart_items/orders/payment_sessions, inclusive `session.user_id` e `o.user_id`);
