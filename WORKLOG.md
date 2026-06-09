@@ -14,6 +14,18 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-09 16:00] — Claude — Lista: +Sanduicheira Electrolux, −panos rosa #2, 4 convidados de teste
+- **What:** no DB unificado isana-core (`fwhnsizxqthbugviraoo`): (1) item **78** "Sanduicheira
+  Electrolux" inserido (Cozinha, R$ 139,90, `/img/itens/78.jpg`); (2) item **74** "Kit 5 panos
+  de prato — rosa #2" desativado (`ativo=false`, soft-delete) → some da lista; (3) 4 `pessoas`
+  de teste com nome `Teste …` (origem=convidado) p/ o Isaque validar o RSVP do site do casamento.
+  Imagem `78.jpg` extraída do PDF do WhatsApp (pdfimages+sips), commitada e deployada.
+- **Files:** `public/img/itens/78.jpg` (commit + `vercel --prod` cha-panelas READY).
+- **Next / open:** AbacatePay QR PIX (substituir InfinitePay) — aguardando definição com o Isaque.
+  Apagar os 4 `Teste …` quando o RSVP estiver validado.
+
+---
+
 ## [2026-06-07] — Claude — CUTOVER APLICADO + DEPLOYADO (unificação isana-core concluída no lado chá)
 - **What:** o refactor da entrada anterior foi para produção. Apliquei `isana-core/db/STAGED_cutover.sql` no banco vivo
   (`users`→VIEW sobre `pessoas`, colunas `user_id`→`pessoa_id`, `place_order(p_pessoa_id)`), com dry-run ROLLBACK validando
