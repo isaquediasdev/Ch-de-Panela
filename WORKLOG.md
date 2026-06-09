@@ -14,6 +14,24 @@ here whenever you finish something, decide something, or find a bug.
 
 ---
 
+## [2026-06-09 16:20] — Claude — PIX QR AbacatePay vira o fluxo principal (InfinitePay → secundário)
+- **What:** o frontend nunca chamava o AbacatePay — o único botão "Pagar" do carrinho ia pro
+  `/api/card-link` (InfinitePay). Reescrevi o checkout: botão **📱 Pagar com PIX** → `/api/pix-charge`
+  → mostra QR (`brCodeBase64`) + copia-e-cola na própria página + polling `/api/pix-status` →
+  redireciona p/ `/meus-pedidos.html` ao confirmar. InfinitePay virou link discreto "pagar com cartão".
+  **Bug grave corrigido no backend:** a integração AbacatePay estava na API errada
+  (`/v2/transparents/create`, corpo `{method,data}`, validava `json.success` que não existe →
+  **sempre lançava erro**). Trocado p/ **`v1/pixQrCode/create`** (corpo plano, `amount` centavos,
+  `description`≤37, `metadata.externalId`, valida `data/error`). Removido `customer` (a API exige
+  os 4 campos name+cellphone+email+taxId e só tínhamos 2). Webhook tornado robusto: aceita
+  `billing.paid`/`transparent.completed`, secret via `?webhookSecret=` (era só `?secret=`), acha a
+  sessão por `externalId` **ou** `charge_id`. Deploy READY, `pixEnabled:true`, carrinho novo no ar.
+- **Files:** `public/carrinho.html`, `server.js` (commit + `vercel --prod`).
+- **Next / open (Isaque):** (1) trocar `ABACATEPAY_API_KEY` na Vercel pela nova key de produção +
+  eu redeployo; (2) no painel AbacatePay, cadastrar webhook
+  `https://cha.isana.ia.br/api/webhooks/abacatepay?webhookSecret=<ABACATEPAY_WEBHOOK_SECRET>`;
+  (3) testar um PIX real ponta a ponta.
+
 ## [2026-06-09 16:00] — Claude — Lista: +Sanduicheira Electrolux, −panos rosa #2, 4 convidados de teste
 - **What:** no DB unificado isana-core (`fwhnsizxqthbugviraoo`): (1) item **78** "Sanduicheira
   Electrolux" inserido (Cozinha, R$ 139,90, `/img/itens/78.jpg`); (2) item **74** "Kit 5 panos
